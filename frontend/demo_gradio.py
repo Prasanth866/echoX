@@ -111,6 +111,15 @@ def analyze_mic_input(audio_input):
         else:
             return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A"
 
+        if float(np.max(np.abs(windowed))) < 0.001:
+            return (
+                "<div style='background: #1e293b; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 6px; text-align: center; color: #fbbf24;'>"
+                "<strong>No Speech Detected:</strong> Audio amplitude is near zero (silent or muted microphone). "
+                "Please verify microphone permissions, check your input volume, and record again."
+                "</div>",
+                "0.0 / 100", "INSUFFICIENT_AUDIO", "0.0 ms"
+            )
+
         det_res = DETECTOR_SERVICE.detect(windowed)
         risk_score = det_res["risk_score"]
         color = det_res["color"]
@@ -182,10 +191,17 @@ with gr.Blocks(title="echoX - Deepfake Voice Protection") as demo:
             )
 
         with gr.TabItem("Live Microphone Guard"):
-            gr.Markdown("#### Speak live into microphone to verify authenticity vs cloned audio playback:")
+            gr.Markdown(
+                """
+                #### Speak live into microphone to verify authenticity vs cloned audio playback:
+                <div style="background: #1e293b; border-left: 4px solid #3b82f6; padding: 10px 14px; margin: 10px 0 16px 0; border-radius: 4px; font-size: 13px; color: #cbd5e1;">
+                    <strong>Browser Microphone Tip:</strong> Web browsers (Chrome, Safari, Edge) require a <strong>Secure Context</strong> to enable recording. Ensure you open <strong><a href="http://localhost:7860" target="_blank" style="color: #60a5fa; text-decoration: underline;">http://localhost:7860</a></strong> or <strong><a href="http://127.0.0.1:7860" target="_blank" style="color: #60a5fa; text-decoration: underline;">http://127.0.0.1:7860</a></strong> (not 0.0.0.0). You can also upload or drag-and-drop a voice memo directly.
+                </div>
+                """
+            )
             with gr.Row():
                 with gr.Column(scale=1):
-                    mic_input = gr.Audio(sources=["microphone"], type="filepath", label="Record Microphone Audio")
+                    mic_input = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record Microphone Audio (or Upload Voice Recording)")
                     btn_mic_verify = gr.Button("Verify Spoken Audio", variant="primary")
                 with gr.Column(scale=1):
                     mic_meter = gr.HTML(label="Live Risk Telemetry")
@@ -316,7 +332,7 @@ with gr.Blocks(title="echoX - Deepfake Voice Protection") as demo:
 
 if __name__ == "__main__":
     demo.launch(
-        server_name="0.0.0.0",
+        server_name="127.0.0.1",
         server_port=7860,
         share=False,
         theme=gr.themes.Soft(primary_hue="blue"),

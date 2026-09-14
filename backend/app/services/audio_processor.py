@@ -37,6 +37,7 @@ class AudioProcessor:
             from pydub import AudioSegment
             with io.BytesIO(audio_bytes) as bio:
                 seg = AudioSegment.from_file(bio)
+                seg = seg.set_sample_width(2)
                 data = np.array(seg.get_array_of_samples(), dtype=np.float32) / 32768.0
                 if seg.channels > 1:
                     data = data.reshape(-1, seg.channels)
