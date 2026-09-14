@@ -1,6 +1,5 @@
 # echoX: Multi-Tier Deepfake Voice & Audio Anti-Spoofing Platform
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Framework: FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg)](https://fastapi.tiangolo.com)
 [![Presentation: Gradio](https://img.shields.io/badge/Gradio-4.20+-orange.svg)](https://gradio.app)
