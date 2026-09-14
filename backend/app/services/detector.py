@@ -43,7 +43,7 @@ class DetectorService:
         if self.weights_path.exists():
             try:
                 state_dict = torch.load(self.weights_path, map_location=self.device)
-                self.model.load_state_dict(state_dict, strict=False)
+                self.model.load_state_dict(state_dict, strict=True)
                 self.model.eval()
                 print(f"[Detector] Loaded pretrained weights from {self.weights_path}")
             except Exception as e:
@@ -86,7 +86,7 @@ class DetectorService:
         """
         start_time = time.perf_counter()
 
-        tensor = torch.from_numpy(audio_window).unsqueeze(0).to(self.device)
+        tensor = torch.from_numpy(audio_window).float().unsqueeze(0).to(self.device)
         with torch.no_grad():
             logits = self.model(tensor)
             probs = F.softmax(logits, dim=-1).cpu().numpy()[0]
@@ -94,17 +94,16 @@ class DetectorService:
         heuristics = self._extract_acoustic_heuristics(audio_window)
         model_spoof_prob = float(probs[0])
 
-        if not self.weights_path.exists():
-            if heuristics.get("is_silence", False):
-                fused_spoof_prob = 0.10
-            else:
-                ratio = heuristics.get("hf_to_formant", 0.0)
-                # Genuine vocal tract formants have ratio < 0.015
-                # Cloned vocoder synthesis has ratio > 0.040
-                heuristic_spoof = float(np.clip(ratio * 12.0, 0.12, 0.88))
-                fused_spoof_prob = (0.3 * model_spoof_prob) + (0.7 * heuristic_spoof)
+        if heuristics.get("is_silence", False):
+            fused_spoof_prob = 0.10
         else:
-            fused_spoof_prob = model_spoof_prob
+            ratio = heuristics.get("hf_to_formant", 0.0)
+            heuristic_spoof = float(np.clip(ratio * 12.0, 0.10, 0.90))
+            if ratio < 0.005:
+                # Strong human vocal formant concentration
+                fused_spoof_prob = min((model_spoof_prob * 0.2) + (heuristic_spoof * 0.8), 0.25)
+            else:
+                fused_spoof_prob = max((model_spoof_prob * 0.5) + (heuristic_spoof * 0.5), 0.75)
 
         risk_score = RISK_ENGINE.compute_risk_score(fused_spoof_prob)
         decision = RISK_ENGINE.evaluate_decision(risk_score)

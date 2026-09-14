@@ -200,6 +200,89 @@ with gr.Blocks(title="echoX - Deepfake Voice Protection") as demo:
                 outputs=[mic_meter, mic_score, mic_action, mic_latency]
             )
 
+        with gr.TabItem("ASVspoof 2019 LA Benchmark (A01-A19)"):
+            gr.Markdown("#### Evaluate against ASVspoof 2019 Logical Access (LA) Classical TTS & VC Algorithms:")
+            
+            asv_choices = [
+                "Bona Fide - Authentic Human Voice",
+                "A01 - Neural Acoustic + WaveNet (TTS)",
+                "A02 - Acoustic Model + WORLD Vocoder (TTS)",
+                "A03 - Linear Prediction (LPC) Vocoder (TTS)",
+                "A04 - Waveform Concatenation / Unit Selection (TTS)",
+                "A05 - Voice Conversion (VAE/GMM VC)",
+                "A06 - Spectral Filtering VC",
+                "A07 - Neural Vocoder (Unseen TTS)",
+                "A08 - Low Bit-Rate Neural Codec (TTS)",
+                "A09 - Direct Waveform Generation (TTS)",
+                "A10 - Modern HiFi-GAN Vocoder (TTS)",
+                "A11 - Sinc-Filtered Vocoder (TTS)",
+                "A12 - LPC Residual Excitation (TTS)",
+                "A13 - Harmonic + Noise Model (VC)",
+                "A14 - Bilinear Frequency Warping (VC)",
+                "A15 - CycleGAN / StarGAN (VC)",
+                "A16 - High-Pitch Synthetic Speech (TTS)",
+                "A17 - Low-Pitch Synthetic Speech (TTS)",
+                "A18 - Diffusion-Based Vocoder (TTS)",
+                "A19 - PSTN/GSM Compressed Voice (VC)"
+            ]
+            
+            asv_sample_map = {
+                "Bona Fide - Authentic Human Voice": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000000.wav"), "Natural authentic speech with human glottal vocal tract resonance."),
+                "A01 - Neural Acoustic + WaveNet (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000001.wav"), "Tacotron acoustic model paired with sample-level WaveNet vocoder."),
+                "A02 - Acoustic Model + WORLD Vocoder (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000002.wav"), "Transfer-function WORLD vocoder with periodic buzzing artifact."),
+                "A03 - Linear Prediction (LPC) Vocoder (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000003.wav"), "Classical LPC all-pole spectral filter model."),
+                "A04 - Waveform Concatenation / Unit Selection (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000004.wav"), "Concatenative unit selection with boundary phase mismatches."),
+                "A05 - Voice Conversion (VAE/GMM VC)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000005.wav"), "Variational autoencoder voice conversion with residual vocoding."),
+                "A06 - Spectral Filtering VC": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000006.wav"), "Transfer-function voice conversion with high-frequency tilt distortion."),
+                "A07 - Neural Vocoder (Unseen TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000007.wav"), "Evaluation unseen neural vocoder with high-frequency phase artifacts."),
+                "A08 - Low Bit-Rate Neural Codec (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000008.wav"), "Neural speech synthesis with sub-band vector quantization."),
+                "A09 - Direct Waveform Generation (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000009.wav"), "End-to-end direct waveform neural generation."),
+                "A10 - Modern HiFi-GAN Vocoder (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000010.wav"), "Tacotron 2 paired with multi-receptive field HiFi-GAN vocoder."),
+                "A11 - Sinc-Filtered Vocoder (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000011.wav"), "Bandpass sinc-filtered vocoder synthesis."),
+                "A12 - LPC Residual Excitation (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000012.wav"), "Linear predictive coding with glottal residual excitation."),
+                "A13 - Harmonic + Noise Model (VC)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000013.wav"), "Harmonic plus noise model (HNM) voice conversion."),
+                "A14 - Bilinear Frequency Warping (VC)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000014.wav"), "Bilinear frequency warping voice conversion."),
+                "A15 - CycleGAN / StarGAN (VC)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000015.wav"), "Adversarial neural network voice conversion."),
+                "A16 - High-Pitch Synthetic Speech (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000016.wav"), "Formant-shifted high fundamental frequency synthetic speech."),
+                "A17 - Low-Pitch Synthetic Speech (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000017.wav"), "Low fundamental frequency synthesis with heavy sub-harmonics."),
+                "A18 - Diffusion-Based Vocoder (TTS)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000018.wav"), "Score-based diffusion acoustic model synthesis."),
+                "A19 - PSTN/GSM Compressed Voice (VC)": (str(TEST_SAMPLES_DIR / "asvspoof2019_la" / "LA_E_0000019.wav"), "Voice conversion passed through telephone bandwidth compression.")
+            }
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    asv_dropdown = gr.Dropdown(
+                        choices=asv_choices,
+                        value=asv_choices[0],
+                        label="Select ASVspoof 2019 LA Attack or Bona Fide Sample"
+                    )
+                    asv_audio_player = gr.Audio(label="Audio Sample Preview", type="filepath")
+                    asv_desc = gr.Textbox(label="Algorithm Technical Breakdown", interactive=False)
+                    btn_asv_run = gr.Button("Evaluate Attack against AASIST Core", variant="primary")
+                    
+                with gr.Column(scale=1):
+                    asv_meter = gr.HTML(label="ASVspoof Risk Gauge")
+                    with gr.Row():
+                        asv_score = gr.Label(label="Risk Score")
+                        asv_action = gr.Label(label="Policy Decision")
+                        asv_lat = gr.Label(label="Inference Latency")
+            
+            def on_asv_select(selected_name):
+                path, desc = asv_sample_map.get(selected_name, ("", ""))
+                return path, desc
+                
+            asv_dropdown.change(
+                on_asv_select,
+                inputs=asv_dropdown,
+                outputs=[asv_audio_player, asv_desc]
+            )
+            
+            btn_asv_run.click(
+                analyze_file_input,
+                inputs=asv_audio_player,
+                outputs=[asv_meter, asv_score, asv_action, asv_lat]
+            )
+
         with gr.TabItem("Architecture & Security Policy"):
             gr.Markdown(
                 """
