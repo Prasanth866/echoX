@@ -58,25 +58,34 @@ class DetectorService:
         norm_audio = audio / peak
         rms = float(np.sqrt(np.mean(np.square(audio))))
 
-        if rms < 0.005:
+        if rms < 0.003:
             return {
                 "is_silence": True,
                 "rms": round(rms, 5),
-                "hf_to_formant": 0.0
+                "hf_ripple": 0.0,
+                "vocal_ratio": 1.0
             }
 
         fft_vals = np.abs(np.fft.rfft(norm_audio))
         freqs = np.fft.rfftfreq(len(norm_audio), 1.0 / AUDIO_CONFIG.SAMPLE_RATE)
 
-        # Formant band (100 - 3500 Hz) vs upper vocoder artifact band (>4500 Hz)
-        formant_energy = np.sum(fft_vals[(freqs >= 100) & (freqs <= 3500)] ** 2)
-        high_energy = np.sum(fft_vals[freqs > 4500] ** 2)
-        hf_to_formant = float(high_energy / (formant_energy + 1e-9))
+        total_energy = np.sum(fft_vals ** 2) + 1e-9
+        vocal_energy = np.sum(fft_vals[(freqs >= 100) & (freqs <= 3500)] ** 2)
+        vocal_ratio = float(vocal_energy / total_energy)
+
+        # High-frequency comb/ripple analysis (>4000 Hz) to detect synthetic vocoder artifacts
+        hf_fft = fft_vals[freqs > 4000]
+        if len(hf_fft) > 10:
+            hf_diff = np.diff(hf_fft)
+            hf_ripple = float(np.std(hf_diff) / (np.mean(hf_fft) + 1e-9))
+        else:
+            hf_ripple = 0.0
 
         return {
             "is_silence": False,
             "rms": round(rms, 5),
-            "hf_to_formant": round(hf_to_formant, 4)
+            "vocal_ratio": round(vocal_ratio, 3),
+            "hf_ripple": round(hf_ripple, 3)
         }
 
     def detect(self, audio_window: np.ndarray) -> Dict[str, Any]:
@@ -97,13 +106,19 @@ class DetectorService:
         if heuristics.get("is_silence", False):
             fused_spoof_prob = 0.10
         else:
-            ratio = heuristics.get("hf_to_formant", 0.0)
-            heuristic_spoof = float(np.clip(ratio * 12.0, 0.10, 0.90))
-            if ratio < 0.005:
-                # Strong human vocal formant concentration
-                fused_spoof_prob = min((model_spoof_prob * 0.2) + (heuristic_spoof * 0.8), 0.25)
+            ripple = heuristics.get("hf_ripple", 0.0)
+            if ripple <= 2.5:
+                # Authentic human voice - smooth continuous spectral decay
+                acoustic_prob = 0.12 + 0.10 * (ripple / 2.5)
+                fused_spoof_prob = (acoustic_prob * 0.85) + (min(model_spoof_prob, 0.25) * 0.15)
+            elif ripple >= 5.0:
+                # Synthetic vocoder / AI clone - comb filter artifact spikes
+                acoustic_prob = 0.75 + min(0.20, (ripple - 5.0) * 0.02)
+                fused_spoof_prob = (acoustic_prob * 0.85) + (max(model_spoof_prob, 0.75) * 0.15)
             else:
-                fused_spoof_prob = max((model_spoof_prob * 0.5) + (heuristic_spoof * 0.5), 0.75)
+                # MFA transition zone
+                acoustic_prob = 0.35 + 0.25 * ((ripple - 2.5) / 2.5)
+                fused_spoof_prob = acoustic_prob
 
         risk_score = RISK_ENGINE.compute_risk_score(fused_spoof_prob)
         decision = RISK_ENGINE.evaluate_decision(risk_score)
