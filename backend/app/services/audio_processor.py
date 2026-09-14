@@ -28,9 +28,19 @@ class AudioProcessor:
         self.target_samples = target_samples
 
     def load_audio_from_bytes(self, audio_bytes: bytes) -> Tuple[np.ndarray, int]:
-        with io.BytesIO(audio_bytes) as bio:
-            data, sr = sf.read(bio, dtype="float32")
-        return data, sr
+        try:
+            with io.BytesIO(audio_bytes) as bio:
+                data, sr = sf.read(bio, dtype="float32")
+            return data, sr
+        except Exception:
+            # Fallback for browser microphone recordings (webm, ogg, m4a)
+            from pydub import AudioSegment
+            with io.BytesIO(audio_bytes) as bio:
+                seg = AudioSegment.from_file(bio)
+                data = np.array(seg.get_array_of_samples(), dtype=np.float32) / 32768.0
+                if seg.channels > 1:
+                    data = data.reshape(-1, seg.channels)
+                return data, seg.frame_rate
 
     def to_mono(self, audio: np.ndarray) -> np.ndarray:
         if audio.ndim > 1:

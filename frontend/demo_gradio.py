@@ -74,48 +74,68 @@ def analyze_file_input(audio_filepath: str):
     return meter_html, score_str, action, latency_str
 
 
-def analyze_mic_input(audio_tuple):
+def analyze_mic_input(audio_input):
     """Callback for live microphone recording."""
-    if audio_tuple is None:
+    if audio_input is None:
         return (
-            "<div style='color: #94a3b8;'>Record spoken audio from your microphone to analyze.</div>",
+            "<div style='color: #94a3b8; padding: 20px; text-align: center;'>Record spoken audio from your microphone and click verify.</div>",
             "N/A", "N/A", "N/A"
         )
 
-    sr, audio_data = audio_tuple
-    if audio_data.dtype == np.int16:
-        audio_float = audio_data.astype(np.float32) / 32768.0
-    elif audio_data.dtype == np.int32:
-        audio_float = audio_data.astype(np.float32) / 2147483648.0
-    else:
-        audio_float = audio_data.astype(np.float32)
+    try:
+        if isinstance(audio_input, str):
+            if not os.path.exists(audio_input):
+                return "<div style='color: #ef4444;'>Audio file not found. Please record again.</div>", "N/A", "N/A", "N/A"
+            with open(audio_input, "rb") as f:
+                audio_bytes = f.read()
+            proc_res = AUDIO_PROCESSOR.process_file_bytes(audio_bytes)
+            windowed = proc_res["processed_audio"]
+        elif isinstance(audio_input, tuple):
+            sr, audio_data = audio_input
+            if audio_data.dtype == np.int16:
+                audio_float = audio_data.astype(np.float32) / 32768.0
+            elif audio_data.dtype == np.int32:
+                audio_float = audio_data.astype(np.float32) / 2147483648.0
+            else:
+                audio_float = audio_data.astype(np.float32)
+            mono = AUDIO_PROCESSOR.to_mono(audio_float)
+            resampled = AUDIO_PROCESSOR.resample(mono, sr)
+            windowed = AUDIO_PROCESSOR.enforce_aasist_window(resampled)
+        elif isinstance(audio_input, dict):
+            sr = audio_input.get("sample_rate", 16000)
+            audio_data = audio_input.get("data")
+            audio_float = audio_data.astype(np.float32) / (32768.0 if audio_data.dtype == np.int16 else 1.0)
+            mono = AUDIO_PROCESSOR.to_mono(audio_float)
+            resampled = AUDIO_PROCESSOR.resample(mono, sr)
+            windowed = AUDIO_PROCESSOR.enforce_aasist_window(resampled)
+        else:
+            return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A"
 
-    mono = AUDIO_PROCESSOR.to_mono(audio_float)
-    resampled = AUDIO_PROCESSOR.resample(mono, sr)
-    windowed = AUDIO_PROCESSOR.enforce_aasist_window(resampled)
+        det_res = DETECTOR_SERVICE.detect(windowed)
+        risk_score = det_res["risk_score"]
+        color = det_res["color"]
+        verdict = det_res["verdict"]
+        action = det_res["action"]
 
-    det_res = DETECTOR_SERVICE.detect(windowed)
-    risk_score = det_res["risk_score"]
-    color = det_res["color"]
-    verdict = det_res["verdict"]
-    action = det_res["action"]
+        meter_html = f"""
+        <div style="background: #0f172a; border-radius: 14px; padding: 24px; text-align: center; border: 2px solid {color}; box-shadow: 0 10px 25px -5px {color}33;">
+            <div style="font-size: 13px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Live Microphone Verification</div>
+            <div style="font-size: 54px; font-weight: 900; color: {color}; margin: 8px 0; font-family: monospace;">
+                {risk_score:.1f}<span style="font-size: 24px; color: #64748b;"> / 100</span>
+            </div>
+            <div style="display: inline-block; background: {color}22; color: {color}; border: 1px solid {color}; padding: 6px 18px; border-radius: 20px; font-weight: 700; font-size: 16px; margin-bottom: 16px;">
+                {verdict} - {action}
+            </div>
+            <div style="background: #334155; border-radius: 9999px; height: 14px; overflow: hidden; margin: 10px auto; max-width: 450px;">
+                <div style="width: {risk_score}%; height: 100%; background: {color}; transition: width 0.6s ease-in-out;"></div>
+            </div>
+            <div style="font-size: 14px; color: #cbd5e1; margin-top: 10px;">{det_res['description']}</div>
+        </div>
+        """
+        return meter_html, f"{risk_score:.1f} / 100", action, f"{det_res['inference_time_ms']} ms"
 
-    meter_html = f"""
-    <div style="background: #0f172a; border-radius: 14px; padding: 24px; text-align: center; border: 2px solid {color}; box-shadow: 0 10px 25px -5px {color}33;">
-        <div style="font-size: 13px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Live Microphone Verification</div>
-        <div style="font-size: 54px; font-weight: 900; color: {color}; margin: 8px 0; font-family: monospace;">
-            {risk_score:.1f}<span style="font-size: 24px; color: #64748b;"> / 100</span>
-        </div>
-        <div style="display: inline-block; background: {color}22; color: {color}; border: 1px solid {color}; padding: 6px 18px; border-radius: 20px; font-weight: 700; font-size: 16px; margin-bottom: 16px;">
-            {verdict} - {action}
-        </div>
-        <div style="background: #334155; border-radius: 9999px; height: 14px; overflow: hidden; margin: 10px auto; max-width: 450px;">
-            <div style="width: {risk_score}%; height: 100%; background: {color}; transition: width 0.6s ease-in-out;"></div>
-        </div>
-        <div style="font-size: 14px; color: #cbd5e1; margin-top: 10px;">{det_res['description']}</div>
-    </div>
-    """
-    return meter_html, f"{risk_score:.1f} / 100", action, f"{det_res['inference_time_ms']} ms"
+    except Exception as e:
+        return f"<div style='color: #ef4444;'>Error analyzing microphone input: {str(e)}</div>", "N/A", "N/A", "N/A"
 
 
 custom_css = """
@@ -123,7 +143,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .gradio-container { max-width: 1200px !important; margin: auto; }
 """
 
-with gr.Blocks(title="echoX - Deepfake Voice Protection", css=custom_css, theme=gr.themes.Soft(primary_hue="blue")) as demo:
+with gr.Blocks(title="echoX - Deepfake Voice Protection") as demo:
     gr.Markdown(
         """
         # echoX: Deepfake Voice & Audio Anti-Spoofing Detection Platform
@@ -165,7 +185,7 @@ with gr.Blocks(title="echoX - Deepfake Voice Protection", css=custom_css, theme=
             gr.Markdown("#### Speak live into microphone to verify authenticity vs cloned audio playback:")
             with gr.Row():
                 with gr.Column(scale=1):
-                    mic_input = gr.Audio(sources=["microphone"], type="numpy", label="Microphone Stream")
+                    mic_input = gr.Audio(sources=["microphone"], type="filepath", label="Record Microphone Audio")
                     btn_mic_verify = gr.Button("Verify Spoken Audio", variant="primary")
                 with gr.Column(scale=1):
                     mic_meter = gr.HTML(label="Live Risk Telemetry")
@@ -212,4 +232,10 @@ with gr.Blocks(title="echoX - Deepfake Voice Protection", css=custom_css, theme=
             )
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=False,
+        theme=gr.themes.Soft(primary_hue="blue"),
+        css=custom_css
+    )

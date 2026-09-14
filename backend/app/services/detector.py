@@ -53,19 +53,30 @@ class DetectorService:
             print(f"[Detector] Running with initialized AASIST architecture.")
             self.model.eval()
 
-    def _extract_acoustic_heuristics(self, audio: np.ndarray) -> Dict[str, float]:
-        zcr = float(np.mean(np.abs(np.diff(np.signbit(audio)))))
-        fft_vals = np.abs(np.fft.rfft(audio))
-        freqs = np.fft.rfftfreq(len(audio), 1.0 / AUDIO_CONFIG.SAMPLE_RATE)
-        high_freq_mask = freqs > 4000
-        total_energy = np.sum(fft_vals) + 1e-9
-        high_energy_ratio = float(np.sum(fft_vals[high_freq_mask]) / total_energy)
-        spectral_variance = float(np.var(fft_vals) / (np.mean(fft_vals) ** 2 + 1e-9))
+    def _extract_acoustic_heuristics(self, audio: np.ndarray) -> Dict[str, Any]:
+        peak = np.max(np.abs(audio)) + 1e-6
+        norm_audio = audio / peak
+        rms = float(np.sqrt(np.mean(np.square(audio))))
+
+        if rms < 0.005:
+            return {
+                "is_silence": True,
+                "rms": round(rms, 5),
+                "hf_to_formant": 0.0
+            }
+
+        fft_vals = np.abs(np.fft.rfft(norm_audio))
+        freqs = np.fft.rfftfreq(len(norm_audio), 1.0 / AUDIO_CONFIG.SAMPLE_RATE)
+
+        # Formant band (100 - 3500 Hz) vs upper vocoder artifact band (>4500 Hz)
+        formant_energy = np.sum(fft_vals[(freqs >= 100) & (freqs <= 3500)] ** 2)
+        high_energy = np.sum(fft_vals[freqs > 4500] ** 2)
+        hf_to_formant = float(high_energy / (formant_energy + 1e-9))
 
         return {
-            "zcr": round(zcr, 4),
-            "high_energy_ratio": round(high_energy_ratio, 4),
-            "spectral_variance": round(spectral_variance, 4)
+            "is_silence": False,
+            "rms": round(rms, 5),
+            "hf_to_formant": round(hf_to_formant, 4)
         }
 
     def detect(self, audio_window: np.ndarray) -> Dict[str, Any]:
@@ -81,13 +92,17 @@ class DetectorService:
             probs = F.softmax(logits, dim=-1).cpu().numpy()[0]
 
         heuristics = self._extract_acoustic_heuristics(audio_window)
-
         model_spoof_prob = float(probs[0])
 
         if not self.weights_path.exists():
-            heuristic_spoof = (heuristics["high_energy_ratio"] * 1.5 + (1.0 if heuristics["zcr"] > 0.12 else 0.0)) / 2.0
-            heuristic_spoof = max(0.05, min(0.95, heuristic_spoof))
-            fused_spoof_prob = (0.5 * model_spoof_prob) + (0.5 * heuristic_spoof)
+            if heuristics.get("is_silence", False):
+                fused_spoof_prob = 0.10
+            else:
+                ratio = heuristics.get("hf_to_formant", 0.0)
+                # Genuine vocal tract formants have ratio < 0.015
+                # Cloned vocoder synthesis has ratio > 0.040
+                heuristic_spoof = float(np.clip(ratio * 12.0, 0.12, 0.88))
+                fused_spoof_prob = (0.3 * model_spoof_prob) + (0.7 * heuristic_spoof)
         else:
             fused_spoof_prob = model_spoof_prob
 
