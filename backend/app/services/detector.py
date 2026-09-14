@@ -49,9 +49,18 @@ class DetectorService:
             except Exception as e:
                 print(f"[Detector] Warning loading weights ({e}). Running in calibrated mode.")
                 self.model.eval()
-        else:
-            print(f"[Detector] Running with initialized AASIST architecture.")
-            self.model.eval()
+        self.ssl_pipeline = None
+        if getattr(MODEL_CONFIG, "ENABLE_SSL_ENSEMBLE", False):
+            try:
+                from transformers import pipeline
+                self.ssl_pipeline = pipeline(
+                    "audio-classification",
+                    model=MODEL_CONFIG.SSL_MODEL_NAME
+                )
+                print(f"[Detector] Initialized SSL modern deepfake backbone: {MODEL_CONFIG.SSL_MODEL_NAME}")
+            except Exception as e:
+                self.ssl_pipeline = None
+                print(f"[Detector] Running AASIST acoustic backbone ({e})")
 
     def _extract_acoustic_heuristics(self, audio: np.ndarray) -> Dict[str, Any]:
         peak = np.max(np.abs(audio)) + 1e-6

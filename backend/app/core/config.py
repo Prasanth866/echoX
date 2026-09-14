@@ -44,6 +44,8 @@ class ModelConfig(BaseModel):
     MODEL_NAME: str = "AASIST"
     WEIGHTS_PATH: Path = WEIGHTS_DIR / "AASIST.pth"
     SPOOF_CLASS_INDEX: int = Field(default=0, description="Hardcoded index for spoof logit probability")
+    ENABLE_SSL_ENSEMBLE: bool = Field(default=True, description="Enable secondary SSL model for modern vocoders")
+    SSL_MODEL_NAME: str = Field(default="MelodyMachine/Deepfake-audio-detection-V2", description="HuggingFace SSL model")
 
 
 class AuditConfig(BaseModel):
