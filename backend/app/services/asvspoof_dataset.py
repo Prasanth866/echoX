@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 
-# Attack algorithm metadata for ASVspoof 2019 LA
 ASVSPOOF_2019_ATTACKS = {
     "bonafide": {
         "type": "Human",
