@@ -119,7 +119,7 @@ class ProtocolEntry:
         self.speaker_id = speaker_id
         self.file_name = file_name
         self.attack_id = attack_id
-        self.key = key  # "bonafide" or "spoof"
+        self.key = key
         self.is_spoof = (key.lower() == "spoof")
 
 

@@ -60,7 +60,6 @@ def evaluate_asvspoof_protocol(protocol_path: Path, audio_dir: Path):
     latencies = []
 
     for entry in entries:
-        # Find audio file (support .wav and .flac)
         audio_file = audio_dir / entry.file_name
         if not audio_file.exists():
             audio_file = audio_dir / f"{entry.file_name}.wav"
@@ -90,7 +89,6 @@ def evaluate_asvspoof_protocol(protocol_path: Path, audio_dir: Path):
         attack_info = ASVspoof2019LALoader.get_attack_info(entry.attack_id if entry.is_spoof else "bonafide")
         print(f"[*] {entry.file_name:<18} | {entry.attack_id:<8} | {score:5.1f}/100 | {det_res['verdict']:<12} | {status} ({attack_info['name'][:24]})")
 
-    # Overall Metrics
     bf_arr = np.array(bonafide_scores) if bonafide_scores else np.array([20.0])
     sp_arr = np.array(spoof_scores) if spoof_scores else np.array([80.0])
     eer, threshold = compute_eer(bf_arr, sp_arr)
@@ -101,7 +99,6 @@ def evaluate_asvspoof_protocol(protocol_path: Path, audio_dir: Path):
     print(f"{'Attack ID':<10} {'Type':<6} {'Algorithm Name':<32} {'Samples':<8} {'Avg Score':<10} {'Detection Rate'}")
     print("-" * 80)
 
-    # Print Bona Fide baseline
     bf_acc = np.mean(bf_arr <= 30) * 100.0 if len(bf_arr) else 100.0
     print(f"{'Bona Fide':<10} {'Human':<6} {'Authentic Natural Voice':<32} {len(bf_arr):<8} {np.mean(bf_arr):5.1f}/100   {bf_acc:5.1f}%")
 
@@ -120,13 +117,11 @@ def evaluate_asvspoof_protocol(protocol_path: Path, audio_dir: Path):
 
 
 def evaluate_directory(samples_dir: Path):
-    # Check if this directory has an ASVspoof protocol file
     protocol_files = list(samples_dir.glob("*.txt"))
     if protocol_files:
         evaluate_asvspoof_protocol(protocol_files[0], samples_dir)
         return
 
-    # Fallback to directory scan
     wav_files = list(samples_dir.glob("*.wav")) + list(samples_dir.glob("*.flac"))
     if not wav_files:
         print(f"No audio files found in {samples_dir}")

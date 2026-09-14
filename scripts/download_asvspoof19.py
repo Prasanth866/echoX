@@ -12,7 +12,6 @@ from pathlib import Path
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "ASVspoof2019_LA"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Edinburgh DataShare official URLs for ASVspoof 2019 LA
 PROTOCOLS_URL = "https://www.asvspoof.org/asvspoof2019/LA.zip"
 
 

@@ -73,7 +73,6 @@ class DetectorService:
         vocal_energy = np.sum(fft_vals[(freqs >= 100) & (freqs <= 3500)] ** 2)
         vocal_ratio = float(vocal_energy / total_energy)
 
-        # High-frequency comb/ripple analysis (>4000 Hz) to detect synthetic vocoder artifacts
         hf_fft = fft_vals[freqs > 4000]
         if len(hf_fft) > 10:
             hf_diff = np.diff(hf_fft)
@@ -119,15 +118,12 @@ class DetectorService:
         else:
             ripple = heuristics.get("hf_ripple", 0.0)
             if ripple <= 2.5:
-                # Authentic human voice - smooth continuous spectral decay
                 acoustic_prob = 0.12 + 0.10 * (ripple / 2.5)
                 fused_spoof_prob = (acoustic_prob * 0.85) + (min(model_spoof_prob, 0.25) * 0.15)
             elif ripple >= 5.0:
-                # Synthetic vocoder / AI clone - comb filter artifact spikes
                 acoustic_prob = 0.75 + min(0.20, (ripple - 5.0) * 0.02)
                 fused_spoof_prob = (acoustic_prob * 0.85) + (max(model_spoof_prob, 0.75) * 0.15)
             else:
-                # MFA transition zone
                 acoustic_prob = 0.35 + 0.25 * ((ripple - 2.5) / 2.5)
                 fused_spoof_prob = acoustic_prob
 

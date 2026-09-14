@@ -18,24 +18,18 @@ class GraphAttentionLayer(nn.Module):
     def __init__(self, in_dim, out_dim, **kwargs):
         super().__init__()
 
-        # attention map
         self.att_proj = nn.Linear(in_dim, out_dim)
         self.att_weight = self._init_new_params(out_dim, 1)
 
-        # project
         self.proj_with_att = nn.Linear(in_dim, out_dim)
         self.proj_without_att = nn.Linear(in_dim, out_dim)
 
-        # batch norm
         self.bn = nn.BatchNorm1d(out_dim)
 
-        # dropout for inputs
         self.input_drop = nn.Dropout(p=0.2)
 
-        # activate
         self.act = nn.SELU(inplace=True)
 
-        # temperature
         self.temp = 1.
         if "temperature" in kwargs:
             self.temp = kwargs["temperature"]
@@ -44,16 +38,12 @@ class GraphAttentionLayer(nn.Module):
         '''
         x   :(#bs, #node, #dim)
         '''
-        # apply input dropout
         x = self.input_drop(x)
 
-        # derive attention map
         att_map = self._derive_att_map(x)
 
-        # projection
         x = self._project(x, att_map)
 
-        # apply batch norm
         x = self._apply_BN(x)
         x = self.act(x)
         return x
@@ -78,12 +68,9 @@ class GraphAttentionLayer(nn.Module):
         out_shape   :(#bs, #node, #node, 1)
         '''
         att_map = self._pairwise_mul_nodes(x)
-        # size: (#bs, #node, #node, #dim_out)
         att_map = torch.tanh(self.att_proj(att_map))
-        # size: (#bs, #node, #node, 1)
         att_map = torch.matmul(att_map, self.att_weight)
 
-        # apply temperature
         att_map = att_map / self.temp
 
         att_map = F.softmax(att_map, dim=-2)
@@ -117,7 +104,6 @@ class HtrgGraphAttentionLayer(nn.Module):
         self.proj_type1 = nn.Linear(in_dim, in_dim)
         self.proj_type2 = nn.Linear(in_dim, in_dim)
 
-        # attention map
         self.att_proj = nn.Linear(in_dim, out_dim)
         self.att_projM = nn.Linear(in_dim, out_dim)
 
@@ -126,23 +112,18 @@ class HtrgGraphAttentionLayer(nn.Module):
         self.att_weight12 = self._init_new_params(out_dim, 1)
         self.att_weightM = self._init_new_params(out_dim, 1)
 
-        # project
         self.proj_with_att = nn.Linear(in_dim, out_dim)
         self.proj_without_att = nn.Linear(in_dim, out_dim)
 
         self.proj_with_attM = nn.Linear(in_dim, out_dim)
         self.proj_without_attM = nn.Linear(in_dim, out_dim)
 
-        # batch norm
         self.bn = nn.BatchNorm1d(out_dim)
 
-        # dropout for inputs
         self.input_drop = nn.Dropout(p=0.2)
 
-        # activate
         self.act = nn.SELU(inplace=True)
 
-        # temperature
         self.temp = 1.
         if "temperature" in kwargs:
             self.temp = kwargs["temperature"]
@@ -163,19 +144,14 @@ class HtrgGraphAttentionLayer(nn.Module):
         if master is None:
             master = torch.mean(x, dim=1, keepdim=True)
 
-        # apply input dropout
         x = self.input_drop(x)
 
-        # derive attention map
         att_map = self._derive_att_map(x, num_type1, num_type2)
 
-        # directional edge for master node
         master = self._update_master(x, master)
 
-        # projection
         x = self._project(x, att_map)
 
-        # apply batch norm
         x = self._apply_BN(x)
         x = self.act(x)
 
@@ -215,7 +191,6 @@ class HtrgGraphAttentionLayer(nn.Module):
 
         att_map = torch.matmul(att_map, self.att_weightM)
 
-        # apply temperature
         att_map = att_map / self.temp
 
         att_map = F.softmax(att_map, dim=-2)
@@ -228,9 +203,7 @@ class HtrgGraphAttentionLayer(nn.Module):
         out_shape   :(#bs, #node, #node, 1)
         '''
         att_map = self._pairwise_mul_nodes(x)
-        # size: (#bs, #node, #node, #dim_out)
         att_map = torch.tanh(self.att_proj(att_map))
-        # size: (#bs, #node, #node, 1)
 
         att_board = torch.zeros_like(att_map[:, :, :, 0]).unsqueeze(-1)
 
@@ -245,9 +218,7 @@ class HtrgGraphAttentionLayer(nn.Module):
 
         att_map = att_board
 
-        # att_map = torch.matmul(att_map, self.att_weight12)
 
-        # apply temperature
         att_map = att_map / self.temp
 
         att_map = F.softmax(att_map, dim=-2)
@@ -352,7 +323,6 @@ class CONV(nn.Module):
         self.kernel_size = kernel_size
         self.sample_rate = sample_rate
 
-        # Forcing the filters to be odd (i.e, perfectly symmetrics)
         if kernel_size % 2 == 0:
             self.kernel_size = self.kernel_size + 1
         self.stride = stride
@@ -441,7 +411,7 @@ class Residual_block(nn.Module):
 
         else:
             self.downsample = False
-        self.mp = nn.MaxPool2d((1, 3))  # self.mp = nn.MaxPool2d((1,4))
+        self.mp = nn.MaxPool2d((1, 3))
 
     def forward(self, x):
         identity = x
@@ -452,12 +422,9 @@ class Residual_block(nn.Module):
             out = x
         out = self.conv1(x)
 
-        # print('out',out.shape)
         out = self.bn2(out)
         out = self.selu(out)
-        # print('out',out.shape)
         out = self.conv2(out)
-        #print('conv2 out',out.shape)
         if self.downsample:
             identity = self.conv_downsample(identity)
 
@@ -534,29 +501,23 @@ class Model(nn.Module):
         x = self.first_bn(x)
         x = self.selu(x)
 
-        # get embeddings using encoder
-        # (#bs, #filt, #spec, #seq)
         e = self.encoder(x)
 
-        # spectral GAT (GAT-S)
-        e_S, _ = torch.max(torch.abs(e), dim=3)  # max along time
+        e_S, _ = torch.max(torch.abs(e), dim=3)
         e_S = e_S.transpose(1, 2) + self.pos_S
 
         gat_S = self.GAT_layer_S(e_S)
-        out_S = self.pool_S(gat_S)  # (#bs, #node, #dim)
+        out_S = self.pool_S(gat_S)
 
-        # temporal GAT (GAT-T)
-        e_T, _ = torch.max(torch.abs(e), dim=2)  # max along freq
+        e_T, _ = torch.max(torch.abs(e), dim=2)
         e_T = e_T.transpose(1, 2)
 
         gat_T = self.GAT_layer_T(e_T)
         out_T = self.pool_T(gat_T)
 
-        # learnable master node
         master1 = self.master1.expand(x.size(0), -1, -1)
         master2 = self.master2.expand(x.size(0), -1, -1)
 
-        # inference 1
         out_T1, out_S1, master1 = self.HtrgGAT_layer_ST11(
             out_T, out_S, master=self.master1)
 
@@ -569,7 +530,6 @@ class Model(nn.Module):
         out_S1 = out_S1 + out_S_aug
         master1 = master1 + master_aug
 
-        # inference 2
         out_T2, out_S2, master2 = self.HtrgGAT_layer_ST21(
             out_T, out_S, master=self.master2)
         out_S2 = self.pool_hS2(out_S2)

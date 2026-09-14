@@ -104,7 +104,6 @@ def analyze_mic_input(audio_input):
         else:
             return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A"
 
-        # Apply VAD, energy gating, peak normalization, and AASIST window wrap-padding
         tensor_norm, is_active = clean_and_normalize_audio(data, sr)
         if not is_active or tensor_norm is None:
             return (
