@@ -104,7 +104,18 @@ class DetectorService:
         model_spoof_prob = float(probs[0])
 
         if heuristics.get("is_silence", False):
-            fused_spoof_prob = 0.10
+            latency_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
+            return {
+                "verdict": "INACTIVE",
+                "action": "ALLOW",
+                "risk_score": 0.0,
+                "spoof_probability": 0.0,
+                "bonafide_probability": 1.0,
+                "color": "#64748B",
+                "description": "No active speech detected (ambient silence / noise gated).",
+                "inference_time_ms": latency_ms,
+                "acoustic_features": heuristics
+            }
         else:
             ripple = heuristics.get("hf_ripple", 0.0)
             if ripple <= 2.5:

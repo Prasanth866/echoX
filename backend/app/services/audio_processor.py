@@ -9,9 +9,49 @@ Standardizes incoming audio via:
 import io
 import numpy as np
 import soundfile as sf
+import torch
+import librosa
 from scipy import signal
 from typing import Tuple, Optional, Dict, Any
 from backend.app.core.config import AUDIO_CONFIG
+
+
+def clean_and_normalize_audio(audio_data: np.ndarray, sr: int = 16000) -> Tuple[Optional[torch.Tensor], bool]:
+    """
+    VAD & Amplitude Normalization to address Acoustic Domain Mismatch:
+    1. Convert to mono
+    2. Resample to 16 kHz
+    3. Trim Leading/Trailing Silence (VAD)
+    4. Check if there is actual speech (Energy Gate)
+    5. Peak & RMS Normalization (Matches Studio Dataset Level)
+    6. Fixed AASIST Window Padding (64,600 samples) with wrap mode
+    """
+    # 1. Convert to mono
+    if audio_data.ndim > 1:
+        audio_data = np.mean(audio_data, axis=1)
+
+    # 2. Resample
+    if sr != 16000:
+        audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=16000)
+
+    # 3. Trim Leading/Trailing Silence (VAD)
+    trimmed_audio, _ = librosa.effects.trim(audio_data, top_db=25)
+
+    # Check if there is actual speech (Energy Gate)
+    energy = float(np.mean(trimmed_audio ** 2))
+    if energy < 1e-4 or len(trimmed_audio) < 8000:  # Under 0.5s of speech
+        return None, False  # Mark as silence/inactive
+
+    # 4. Peak & RMS Normalization (Matches Studio Dataset Level)
+    trimmed_audio = trimmed_audio / (np.max(np.abs(trimmed_audio)) + 1e-6)
+
+    # 5. Fixed AASIST Window Padding (64,600 samples)
+    if len(trimmed_audio) < 64600:
+        padded = np.pad(trimmed_audio, (0, 64600 - len(trimmed_audio)), mode="wrap")
+    else:
+        padded = trimmed_audio[:64600]
+
+    return torch.FloatTensor(padded).unsqueeze(0), True
 
 
 class AudioProcessor:

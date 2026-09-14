@@ -17,7 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from backend.app.services.audio_processor import AUDIO_PROCESSOR
+from backend.app.services.audio_processor import AUDIO_PROCESSOR, clean_and_normalize_audio
 from backend.app.services.detector import DETECTOR_SERVICE
 from backend.app.core.audit_engine import AUDIT_LOGGER
 from backend.app.core.config import TEST_SAMPLES_DIR
@@ -88,38 +88,34 @@ def analyze_mic_input(audio_input):
                 return "<div style='color: #ef4444;'>Audio file not found. Please record again.</div>", "N/A", "N/A", "N/A"
             with open(audio_input, "rb") as f:
                 audio_bytes = f.read()
-            proc_res = AUDIO_PROCESSOR.process_file_bytes(audio_bytes)
-            windowed = proc_res["processed_audio"]
+            data, sr = AUDIO_PROCESSOR.load_audio_from_bytes(audio_bytes)
         elif isinstance(audio_input, tuple):
             sr, audio_data = audio_input
             if audio_data.dtype == np.int16:
-                audio_float = audio_data.astype(np.float32) / 32768.0
+                data = audio_data.astype(np.float32) / 32768.0
             elif audio_data.dtype == np.int32:
-                audio_float = audio_data.astype(np.float32) / 2147483648.0
+                data = audio_data.astype(np.float32) / 2147483648.0
             else:
-                audio_float = audio_data.astype(np.float32)
-            mono = AUDIO_PROCESSOR.to_mono(audio_float)
-            resampled = AUDIO_PROCESSOR.resample(mono, sr)
-            windowed = AUDIO_PROCESSOR.enforce_aasist_window(resampled)
+                data = audio_data.astype(np.float32)
         elif isinstance(audio_input, dict):
             sr = audio_input.get("sample_rate", 16000)
             audio_data = audio_input.get("data")
-            audio_float = audio_data.astype(np.float32) / (32768.0 if audio_data.dtype == np.int16 else 1.0)
-            mono = AUDIO_PROCESSOR.to_mono(audio_float)
-            resampled = AUDIO_PROCESSOR.resample(mono, sr)
-            windowed = AUDIO_PROCESSOR.enforce_aasist_window(resampled)
+            data = audio_data.astype(np.float32) / (32768.0 if audio_data.dtype == np.int16 else 1.0)
         else:
             return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A"
 
-        if float(np.max(np.abs(windowed))) < 0.001:
+        # Apply VAD, energy gating, peak normalization, and AASIST window wrap-padding
+        tensor_norm, is_active = clean_and_normalize_audio(data, sr)
+        if not is_active or tensor_norm is None:
             return (
-                "<div style='background: #1e293b; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 6px; text-align: center; color: #fbbf24;'>"
-                "<strong>No Speech Detected:</strong> Audio amplitude is near zero (silent or muted microphone). "
-                "Please verify microphone permissions, check your input volume, and record again."
+                "<div style='background: #1e293b; border-left: 4px solid #64748b; padding: 16px; border-radius: 6px; text-align: center; color: #94a3b8;'>"
+                "<strong>No Active Speech Detected:</strong> Audio is silent or ambient background noise (under 0.5s speech). "
+                "Please speak clearly into the microphone for 2-3 seconds and click verify."
                 "</div>",
-                "0.0 / 100", "INSUFFICIENT_AUDIO", "0.0 ms"
+                "0.0 / 100", "INACTIVE", "0.0 ms"
             )
 
+        windowed = tensor_norm.squeeze(0).cpu().numpy()
         det_res = DETECTOR_SERVICE.detect(windowed)
         risk_score = det_res["risk_score"]
         color = det_res["color"]
