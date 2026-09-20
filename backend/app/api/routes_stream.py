@@ -11,6 +11,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from backend.app.services.audio_processor import StreamBuffer
 from backend.app.services.detector import DETECTOR_SERVICE
+from backend.app.core.config import AUDIO_CONFIG, MODEL_CONFIG
 
 router = APIRouter(tags=["Real-Time Streaming"])
 
@@ -20,6 +21,7 @@ async def websocket_stream_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time audio streaming.
     Receives raw 16-bit PCM bytes (16 kHz mono) or float32 arrays.
+    Buffers into 64,000-sample (4.0s) windows and runs Facebook Wav2Vec 2.0 inference.
     Returns raw frame-by-frame risk telemetry.
     """
     await websocket.accept()
@@ -30,8 +32,9 @@ async def websocket_stream_endpoint(websocket: WebSocket):
         await websocket.send_json({
             "event": "connected",
             "session_id": session_id,
-            "sample_rate": 16000,
-            "target_window": 64600,
+            "sample_rate": AUDIO_CONFIG.SAMPLE_RATE,
+            "target_window": AUDIO_CONFIG.SAMPLE_WINDOW,
+            "model": MODEL_CONFIG.MODEL_NAME,
             "status": "ready"
         })
 

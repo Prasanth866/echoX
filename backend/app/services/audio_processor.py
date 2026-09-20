@@ -2,7 +2,7 @@
 echoX - Audio Preprocessor & DSP Pipeline
 Standardizes incoming audio via:
 1. Resampling to 16 kHz & Mono conversion.
-2. Direct Slicing / Zero-padding to 64,600 samples (AASIST window).
+2. Direct Slicing / Zero-padding to standard 4.0-second window (64,000 samples).
 3. Streaming buffer management.
 """
 
@@ -18,13 +18,13 @@ from backend.app.core.config import AUDIO_CONFIG
 
 def clean_and_normalize_audio(audio_data: np.ndarray, sr: int = 16000) -> Tuple[Optional[torch.Tensor], bool]:
     """
-    VAD & Amplitude Normalization to address Acoustic Domain Mismatch:
+    VAD & Amplitude Normalization for Facebook Wav2Vec 2.0 Ingestion:
     1. Convert to mono
     2. Resample to 16 kHz
     3. Trim Leading/Trailing Silence (VAD)
     4. Check if there is actual speech (Energy Gate)
-    5. Peak & RMS Normalization (Matches Studio Dataset Level)
-    6. Fixed AASIST Window Padding (64,600 samples) with wrap mode
+    5. Peak & RMS Normalization
+    6. Fixed 4.0-second Window Padding (64,000 samples) with wrap/constant mode
     """
     if audio_data.ndim > 1:
         audio_data = np.mean(audio_data, axis=1)
@@ -40,17 +40,18 @@ def clean_and_normalize_audio(audio_data: np.ndarray, sr: int = 16000) -> Tuple[
 
     trimmed_audio = trimmed_audio / (np.max(np.abs(trimmed_audio)) + 1e-6)
 
-    if len(trimmed_audio) < 64600:
-        padded = np.pad(trimmed_audio, (0, 64600 - len(trimmed_audio)), mode="wrap")
+    target_samples = AUDIO_CONFIG.SAMPLE_WINDOW
+    if len(trimmed_audio) < target_samples:
+        padded = np.pad(trimmed_audio, (0, target_samples - len(trimmed_audio)), mode="wrap")
     else:
-        padded = trimmed_audio[:64600]
+        padded = trimmed_audio[:target_samples]
 
     return torch.FloatTensor(padded).unsqueeze(0), True
 
 
 class AudioProcessor:
     """
-    Standardizes audio inputs for AASIST inference using direct slicing and zero-padding.
+    Standardizes audio inputs for Facebook Wav2Vec 2.0 inference using direct slicing and zero-padding.
     """
 
     def __init__(
@@ -88,11 +89,11 @@ class AudioProcessor:
         resampled = signal.resample(audio, target_length)
         return resampled.astype(np.float32)
 
-    def enforce_aasist_window(self, audio: np.ndarray) -> np.ndarray:
+    def enforce_audio_window(self, audio: np.ndarray) -> np.ndarray:
         """
-        Direct Slicing / Zero-padding to enforce exactly 64,600 samples.
-        - If shorter: zero-pad directly to 64,600 samples.
-        - If longer: slice directly to first 64,600 samples.
+        Direct Slicing / Zero-padding to enforce exactly 4.0-second (64,000 samples) window.
+        - If shorter: zero-pad directly to target_samples.
+        - If longer: slice directly to first target_samples.
         """
         length = len(audio)
         if length == self.target_samples:
@@ -105,18 +106,20 @@ class AudioProcessor:
             sliced = audio[:self.target_samples]
             return sliced.astype(np.float32)
 
+    enforce_aasist_window = enforce_audio_window
+
     def process_file_bytes(self, audio_bytes: bytes) -> Dict[str, Any]:
         """
         Ingestion pipeline:
         1. Decode bytes -> (data, sr)
         2. Mono conversion
         3. Resampling to 16 kHz
-        4. Direct slicing or zero-padding to 64,600 samples
+        4. Direct slicing or zero-padding to 4.0 seconds (64,000 samples)
         """
         data, sr = self.load_audio_from_bytes(audio_bytes)
         mono = self.to_mono(data)
         resampled = self.resample(mono, sr)
-        windowed = self.enforce_aasist_window(resampled)
+        windowed = self.enforce_audio_window(resampled)
 
         return {
             "processed_audio": windowed,
@@ -127,7 +130,7 @@ class AudioProcessor:
 
 class StreamBuffer:
     """
-    Buffer for streaming audio chunks. Accumulates samples and extracts 64,600-sample windows.
+    Buffer for streaming audio chunks. Accumulates samples and extracts 64,000-sample (4.0s) windows.
     """
 
     def __init__(

@@ -41,11 +41,24 @@ app.include_router(upload_router)
 app.include_router(stream_router)
 
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from backend.app.core.config import TEST_SAMPLES_DIR, BASE_DIR
+
+dashboard_dir = BASE_DIR / "frontend" / "web_dashboard"
+if dashboard_dir.exists():
+    app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
+
+if TEST_SAMPLES_DIR.exists():
+    app.mount("/samples", StaticFiles(directory=str(TEST_SAMPLES_DIR)), name="samples")
+
+
 @app.get("/health")
 async def health_check():
     return {
         "status": "online",
         "service": "echoX",
+        "model": "Facebook Wav2Vec 2.0",
         "device": str(DETECTOR_SERVICE.device),
         "version": "1.0.0"
     }
@@ -53,15 +66,14 @@ async def health_check():
 
 @app.get("/")
 async def root():
+    index_file = dashboard_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
     return {
-        "message": "Welcome to echoX Anti-Spoofing Core Engine",
+        "message": "Welcome to echoX Anti-Spoofing Core Engine (Facebook Wav2Vec 2.0)",
         "docs": "/docs",
         "health": "/health",
-        "api_endpoints": {
-            "file_analysis": "/api/v1/analyze-file",
-            "audit_logs": "/api/v1/audit-logs",
-            "websocket_stream": "/ws/stream"
-        }
+        "dashboard": "/dashboard"
     }
 
 

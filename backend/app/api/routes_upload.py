@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/v1", tags=["Audio Inspection"])
 async def analyze_audio_file(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
     Analyzes an uploaded audio file (.wav, .mp3, .flac).
-    Performs direct slicing/zero-padding, AASIST feature extraction, 0-100 risk scoring,
+    Performs standard 4.0s windowing, Facebook Wav2Vec 2.0 feature extraction, 0-100 risk scoring,
     and logs the verification in backend audit history.
     """
     if not file.filename:

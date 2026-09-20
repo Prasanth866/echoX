@@ -3,20 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>echoX - Live Operations Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <title>echoX - Facebook Wav2Vec 2.0 Deepfake Voice Shield</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-primary: #0b0f19;
-            --bg-secondary: #111827;
-            --card-bg: rgba(17, 24, 39, 0.85);
-            --border: rgba(255, 255, 255, 0.08);
-            --accent-blue: #3b82f6;
+            --bg-base: #070a13;
+            --bg-surface: rgba(15, 23, 42, 0.75);
+            --bg-surface-hover: rgba(30, 41, 59, 0.85);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(59, 130, 246, 0.3);
+            --primary: #3b82f6;
+            --primary-glow: rgba(59, 130, 246, 0.25);
             --accent-green: #10b981;
+            --accent-green-glow: rgba(16, 185, 129, 0.25);
             --accent-amber: #f59e0b;
+            --accent-amber-glow: rgba(245, 158, 11, 0.25);
             --accent-red: #ef4444;
-            --text-primary: #f9fafb;
-            --text-muted: #9ca3af;
+            --accent-red-glow: rgba(239, 68, 68, 0.3);
+            --text-main: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
         }
 
         * {
@@ -26,254 +32,813 @@
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             background-image: 
-                radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 85% 85%, rgba(139, 92, 246, 0.08) 0%, transparent 40%);
+                radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.1) 0%, transparent 45%),
+                radial-gradient(circle at 90% 90%, rgba(139, 92, 246, 0.08) 0%, transparent 45%);
+            background-attachment: fixed;
         }
 
         header {
-            border-bottom: 1px solid var(--border);
-            padding: 1.25rem 2rem;
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 1.1rem 2.5rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            backdrop-filter: blur(12px);
-            background: rgba(11, 15, 25, 0.7);
+            backdrop-filter: blur(16px);
+            background: rgba(7, 10, 19, 0.8);
             position: sticky;
             top: 0;
             z-index: 50;
         }
 
-        .logo-area {
+        .brand {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.85rem;
         }
 
-        .brand-title {
-            font-size: 1.35rem;
+        .brand-logo {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.25rem;
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .brand-text h1 {
+            font-size: 1.25rem;
             font-weight: 800;
             letter-spacing: -0.02em;
         }
 
-        .brand-title span {
-            color: var(--accent-blue);
+        .brand-text span {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
         }
 
-        .system-status {
+        .system-pill {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            font-size: 0.85rem;
-            color: var(--text-muted);
+            gap: 0.6rem;
+            font-size: 0.82rem;
+            color: #cbd5e1;
             background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            padding: 0.35rem 0.85rem;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            padding: 0.4rem 0.95rem;
             border-radius: 9999px;
+            font-family: 'JetBrains Mono', monospace;
         }
 
-        .status-dot {
+        .pulse-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
             background-color: var(--accent-green);
             box-shadow: 0 0 8px var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
 
         main {
             flex: 1;
-            padding: 2.5rem 2rem;
-            max-width: 1280px;
+            padding: 2.25rem 2rem;
+            max-width: 1320px;
             margin: 0 auto;
             width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
         }
 
-        .grid-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.75rem;
-        }
-
-        @media (max-width: 850px) {
-            .grid-layout {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.75rem;
+        .samples-section {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 1.5rem 1.75rem;
             backdrop-filter: blur(16px);
         }
 
-        .card-header {
+        .section-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 1.25rem;
         }
 
-        .card-title {
+        .section-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge-info {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            font-size: 0.75rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .samples-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.2rem;
+        }
+
+        @media (max-width: 992px) {
+            .samples-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .samples-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .sample-card {
+            background: rgba(17, 24, 39, 0.6);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .sample-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary);
+            background: var(--bg-surface-hover);
+            box-shadow: 0 8px 24px -6px var(--primary-glow);
+        }
+
+        .sample-card.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary);
+        }
+
+        .sample-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sample-number {
             font-size: 1.1rem;
+            font-weight: 800;
+            color: #60a5fa;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .sample-tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 9999px;
+            text-transform: uppercase;
+        }
+
+        .tag-genuine {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .tag-spoof {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .sample-title {
+            font-size: 0.95rem;
             font-weight: 700;
         }
 
-        .risk-display {
-            text-align: center;
-            padding: 2rem 1rem;
+        .sample-desc {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            flex: 1;
         }
 
-        .risk-number {
+        .btn-test {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .sample-card:hover .btn-test {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 1.75rem;
+        }
+
+        @media (max-width: 900px) {
+            .workspace-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 1.75rem;
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .audio-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .mic-box {
+            border: 2px dashed rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            padding: 1.75rem 1.5rem;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.2);
+            transition: all 0.2s;
+        }
+
+        .mic-box.recording {
+            border-color: var(--accent-red);
+            background: rgba(239, 68, 68, 0.05);
+            box-shadow: 0 0 20px var(--accent-red-glow);
+        }
+
+        .mic-btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .btn-action {
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-record {
+            background: #ef4444;
+            color: white;
+            box-shadow: 0 4px 14px var(--accent-red-glow);
+        }
+
+        .btn-record:hover {
+            background: #dc2626;
+            transform: scale(1.02);
+        }
+
+        .btn-stop {
+            background: #475569;
+            color: white;
+        }
+
+        .btn-stop:hover {
+            background: #334155;
+        }
+
+        .btn-verify {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+
+        .btn-verify:hover {
+            background: #2563eb;
+            transform: scale(1.02);
+        }
+
+        .waveform-canvas {
+            width: 100%;
+            height: 64px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            margin-top: 1rem;
+            display: block;
+        }
+
+        .dropzone {
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .dropzone input {
+            display: none;
+        }
+
+        .gauge-container {
+            text-align: center;
+            padding: 1rem 0;
+        }
+
+        .risk-score-val {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 4rem;
+            font-size: 4.5rem;
             font-weight: 800;
             line-height: 1;
             color: var(--accent-green);
-            margin-bottom: 0.5rem;
+            transition: color 0.4s;
+            letter-spacing: -0.04em;
         }
 
-        .risk-label {
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
+        .risk-score-unit {
+            font-size: 1.5rem;
             color: var(--text-muted);
-            margin-bottom: 1.25rem;
+            font-weight: 600;
         }
 
-        .badge-verdict {
+        .verdict-pill {
             display: inline-block;
-            padding: 0.4rem 1.2rem;
+            margin-top: 0.85rem;
+            padding: 0.45rem 1.4rem;
             border-radius: 9999px;
-            font-weight: 700;
-            font-size: 0.85rem;
+            font-weight: 800;
+            font-size: 0.88rem;
+            letter-spacing: 0.05em;
             background: rgba(16, 185, 129, 0.15);
             color: var(--accent-green);
-            border: 1px solid rgba(16, 185, 129, 0.4);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            transition: all 0.4s;
         }
 
-        .meter-track {
-            height: 10px;
-            background: rgba(255, 255, 255, 0.08);
+        .gauge-bar-track {
+            height: 12px;
+            background: rgba(255, 255, 255, 0.07);
             border-radius: 9999px;
             overflow: hidden;
-            margin: 1.5rem 0;
+            margin: 1.5rem 0 1rem 0;
+            position: relative;
         }
 
-        .meter-fill {
+        .gauge-bar-fill {
             height: 100%;
-            width: 15%;
+            width: 12%;
             background: var(--accent-green);
-            transition: width 0.4s ease, background 0.4s ease;
+            border-radius: 9999px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s;
+            box-shadow: 0 0 12px var(--accent-green-glow);
         }
 
-        .metrics-row {
+        .verdict-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            min-height: 2.2rem;
+            line-height: 1.4;
+        }
+
+        .telemetry-row {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--border);
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border-subtle);
         }
 
-        .metric-box {
+        .telemetry-box {
             text-align: center;
         }
 
-        .metric-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
+        .telemetry-label {
+            font-size: 0.72rem;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            color: var(--text-muted);
         }
 
-        .metric-val {
+        .telemetry-value {
             font-family: 'JetBrains Mono', monospace;
             font-size: 1.15rem;
             font-weight: 700;
-            margin-top: 0.25rem;
+            margin-top: 0.35rem;
+            color: #e2e8f0;
         }
 
-        .audit-terminal {
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1rem;
+        .terminal-box {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 1.1rem;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            color: #d1d5db;
-            line-height: 1.6;
-            max-height: 320px;
+            font-size: 0.78rem;
+            color: #94a3b8;
+            max-height: 180px;
             overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .terminal-line-highlight {
+            color: #38bdf8;
         }
     </style>
 </head>
 <body>
     <header>
-        <div class="logo-area">
-            <div class="brand-title">echo<span>X</span></div>
+        <div class="brand">
+            <div class="brand-logo">eX</div>
+            <div class="brand-text">
+                <h1>echo<span>X</span></h1>
+                <span>Facebook Wav2Vec 2.0 Speech Defense</span>
+            </div>
         </div>
-        <div class="system-status">
-            <div class="status-dot"></div>
-            <span>AASIST Core Active | Port 8000</span>
+        <div class="system-pill">
+            <div class="pulse-dot"></div>
+            <span>Wav2Vec2 Core Active | 16 kHz</span>
         </div>
     </header>
 
     <main>
-        <div class="grid-layout">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">Real-Time Voice Risk Gauge</div>
-                    <span style="font-size: 0.8rem; color: var(--text-muted);">Raw Frame-by-Frame</span>
+        <section class="samples-section">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>Quick Calibration Benchmarks</span>
+                    <span class="badge-info">4.0s @ 16kHz</span>
                 </div>
-                <div class="risk-display">
-                    <div class="risk-label">Impersonation Probability Score</div>
-                    <div class="risk-number" id="riskScore">12.4</div>
-                    <div class="badge-verdict" id="riskVerdict">LOW RISK - ALLOW</div>
-                    
-                    <div class="meter-track">
-                        <div class="meter-fill" id="riskFill"></div>
+                <span style="font-size: 0.8rem; color: var(--text-muted);">1-Click Deepfake Verification</span>
+            </div>
+
+            <div class="samples-grid">
+                <div class="sample-card" onclick="runSampleTest('sample_1_genuine_human.wav', 'Authentic Human Voice')">
+                    <div class="sample-card-header">
+                        <span class="sample-number">01</span>
+                        <span class="sample-tag tag-genuine">Bona Fide</span>
+                    </div>
+                    <div class="sample-title">1. Genuine Human</div>
+                    <div class="sample-desc">Natural vocal tract formants (F1, F2, F3) with biological glottal pulses.</div>
+                    <button class="btn-test">Evaluate Sample 1</button>
+                </div>
+
+                <div class="sample-card" onclick="runSampleTest('sample_2_cloned_elevenlabs.wav', 'ElevenLabs AI Voice Clone')">
+                    <div class="sample-card-header">
+                        <span class="sample-number">02</span>
+                        <span class="sample-tag tag-spoof">AI Clone</span>
+                    </div>
+                    <div class="sample-title">2. ElevenLabs Clone</div>
+                    <div class="sample-desc">Modern neural vocoder synthesis with high-frequency phase alignment.</div>
+                    <button class="btn-test">Evaluate Sample 2</button>
+                </div>
+
+                <div class="sample-card" onclick="runSampleTest('sample_3_neural_tts.wav', 'WaveNet Neural TTS')">
+                    <div class="sample-card-header">
+                        <span class="sample-number">03</span>
+                        <span class="sample-tag tag-spoof">Neural TTS</span>
+                    </div>
+                    <div class="sample-title">3. WaveNet TTS</div>
+                    <div class="sample-desc">Tacotron & sample-level WaveNet model with over-smoothed pitch contours.</div>
+                    <button class="btn-test">Evaluate Sample 3</button>
+                </div>
+
+                <div class="sample-card" onclick="runSampleTest('sample_4_voice_conversion.wav', 'Voice Conversion (VC)')">
+                    <div class="sample-card-header">
+                        <span class="sample-number">04</span>
+                        <span class="sample-tag tag-spoof">Voice Conv</span>
+                    </div>
+                    <div class="sample-title">4. Voice Conversion</div>
+                    <div class="sample-desc">Cross-speaker spectral envelope transformation with boundary glitches.</div>
+                    <button class="btn-test">Evaluate Sample 4</button>
+                </div>
+            </div>
+        </section>
+
+        <div class="workspace-grid">
+            <div class="panel-card">
+                <div class="section-title">
+                    <span>Live Audio & Microphone Guard</span>
+                </div>
+
+                <div class="audio-controls">
+                    <div class="mic-box" id="micBox">
+                        <div id="micStatusText" style="font-weight: 600; color: #cbd5e1; margin-bottom: 0.5rem;">
+                            Click to record live microphone speech (4 seconds recommended)
+                        </div>
+                        <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
+                        
+                        <div class="mic-btn-group">
+                            <button id="btnRecord" class="btn-action btn-record" onclick="toggleRecording()">
+                                <span>Record Live Mic</span>
+                            </button>
+                            <button id="btnVerify" class="btn-action btn-verify" onclick="verifyRecordedAudio()" style="display: none;">
+                                <span>Verify Spoken Audio</span>
+                            </button>
+                        </div>
+                        <audio id="audioPreview" controls style="display: none; width: 100%; margin-top: 1rem;"></audio>
+                    </div>
+
+                    <div class="dropzone">
+                        <div>
+                            <div style="font-weight: 600; font-size: 0.88rem;">Or upload custom audio file</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">WAV, MP3, FLAC (16 kHz auto-resampled)</div>
+                        </div>
+                        <label class="btn-action btn-stop" style="cursor: pointer; padding: 0.5rem 1rem;">
+                            Browse File
+                            <input type="file" id="fileUpload" accept="audio/*" onchange="handleFileUpload(event)">
+                        </label>
                     </div>
                 </div>
 
-                <div class="metrics-row">
-                    <div class="metric-box">
-                        <div class="metric-label">Latency</div>
-                        <div class="metric-val">16.8 ms</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">Sample Window</div>
-                        <div class="metric-val">64,600</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">Policy</div>
-                        <div class="metric-val">ALLOW</div>
-                    </div>
+                <div class="section-title" style="margin-top: 0.5rem;">
+                    <span>Compliance Audit Ledger</span>
+                </div>
+                <div class="terminal-box" id="terminalLog">
+                    <div>[SYS INIT] echoX Facebook Wav2Vec 2.0 Engine online.</div>
+                    <div>[READY] Awaiting live speech or calibration sample input...</div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">Backend Audit Compliance Log</div>
+            <div class="panel-card">
+                <div class="section-title">
+                    <span>Wav2Vec 2.0 Risk Telemetry</span>
+                    <span class="badge-info" id="modelBadge">Wav2Vec2 Base</span>
                 </div>
-                <div class="audit-terminal" id="auditLog">
-                    <div>[AUDIT INIT] echoX Backend Compliance Log Initialized</div>
-                    <div style="margin-top: 0.75rem;">[LAST VERIFICATION EVENT]</div>
-                    <div>Log ID: #101</div>
-                    <div>Audio SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</div>
-                    <div>Decision: VERIFIED_GENUINE (Score: 12.4/100)</div>
-                    <div>Action: ALLOW</div>
-                    <div>Status: RECORDED</div>
+
+                <div class="gauge-container">
+                    <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.08em;">
+                        Impersonation Risk Score
+                    </div>
+                    <div>
+                        <span class="risk-score-val" id="riskScore">0.0</span>
+                        <span class="risk-score-unit">/ 100</span>
+                    </div>
+
+                    <div class="verdict-pill" id="verdictPill">AWAITING INPUT</div>
+
+                    <div class="gauge-bar-track">
+                        <div class="gauge-bar-fill" id="gaugeFill" style="width: 0%;"></div>
+                    </div>
+
+                    <div class="verdict-desc" id="verdictDesc">
+                        Select a sample or record spoken audio to evaluate authenticity with Facebook Wav2Vec 2.0.
+                    </div>
+                </div>
+
+                <div class="telemetry-row">
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">Inference Latency</div>
+                        <div class="telemetry-value" id="latencyVal">-- ms</div>
+                    </div>
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">Policy Action</div>
+                        <div class="telemetry-value" id="actionVal">ALLOW</div>
+                    </div>
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">Window Length</div>
+                        <div class="telemetry-value">4.0s (64k)</div>
+                    </div>
+                </div>
+
+                <div class="telemetry-row" style="margin-top: -0.5rem;">
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">Spoof Prob</div>
+                        <div class="telemetry-value" id="spoofProbVal">0.00%</div>
+                    </div>
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">Bona Fide Prob</div>
+                        <div class="telemetry-value" id="bonafideProbVal">100.0%</div>
+                    </div>
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">Latent Dimension</div>
+                        <div class="telemetry-value">768-D</div>
+                    </div>
                 </div>
             </div>
         </div>
     </main>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordedBlob = null;
+        let isRecording = false;
+        let audioContext, analyser, animId;
+
+        function setupVisualizer(stream) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            analyser.fftSize = 64;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            const canvas = document.getElementById('waveformCanvas');
+            const ctx = canvas.getContext('2d');
+
+            function draw() {
+                animId = requestAnimationFrame(draw);
+                analyser.getByteFrequencyData(dataArray);
+                ctx.fillStyle = 'rgba(7, 10, 19, 0.4)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                const barWidth = (canvas.width / bufferLength) * 2.2;
+                let x = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height;
+                    ctx.fillStyle = '#3b82f6';
+                    ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                    x += barWidth + 2;
+                }
+            }
+            draw();
+        }
+
+        async function toggleRecording() {
+            const btnRecord = document.getElementById('btnRecord');
+            const micBox = document.getElementById('micBox');
+            const statusText = document.getElementById('micStatusText');
+            const btnVerify = document.getElementById('btnVerify');
+
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    setupVisualizer(stream);
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) audioChunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        recordedBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(recordedBlob);
+                        const player = document.getElementById('audioPreview');
+                        player.src = audioUrl;
+                        player.style.display = 'block';
+                        btnVerify.style.display = 'inline-flex';
+                        statusText.innerText = 'Recording complete. Click "Verify Spoken Audio" to evaluate.';
+                        if (animId) cancelAnimationFrame(animId);
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    micBox.classList.add('recording');
+                    btnRecord.innerHTML = '<span>Stop Recording</span>';
+                    btnRecord.className = 'btn-action btn-stop';
+                    statusText.innerText = 'Recording live microphone audio... (Speak now)';
+                } catch (err) {
+                    alert('Microphone access denied or not available in this context: ' + err.message);
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                micBox.classList.remove('recording');
+                btnRecord.innerHTML = '<span>Record Again</span>';
+                btnRecord.className = 'btn-action btn-record';
+            }
+        }
+
+        async function verifyRecordedAudio() {
+            if (!recordedBlob) return;
+            const formData = new FormData();
+            formData.append('file', recordedBlob, 'live_microphone.wav');
+            await postAudioData(formData, 'Live Microphone Recording');
+        }
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            await postAudioData(formData, file.name);
+        }
+
+        async function runSampleTest(sampleFilename, sampleLabel) {
+            logTerminal(`[BENCHMARK] Requesting preloaded 4.0s sample: ${sampleLabel}...`);
+            try {
+                const res = await fetch(`/samples/${sampleFilename}`);
+                if (!res.ok) {
+                    throw new Error(`Failed to load ${sampleFilename}`);
+                }
+                const blob = await res.blob();
+                const formData = new FormData();
+                formData.append('file', blob, sampleFilename);
+                await postAudioData(formData, sampleLabel);
+            } catch (e) {
+                logTerminal(`[ERROR] Loading sample: ${e.message}`);
+            }
+        }
+
+        async function postAudioData(formData, label) {
+            logTerminal(`[ANALYSIS] Forwarding audio to Facebook Wav2Vec 2.0 backbone...`);
+            try {
+                const resp = await fetch('/api/v1/analyze-file', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Inference error');
+                updateUI(data, label);
+            } catch (err) {
+                logTerminal(`[ERROR] ${err.message}`);
+                alert('Analysis failed: ' + err.message);
+            }
+        }
+
+        function updateUI(res, label) {
+            const scoreEl = document.getElementById('riskScore');
+            const verdictEl = document.getElementById('verdictPill');
+            const gaugeEl = document.getElementById('gaugeFill');
+            const descEl = document.getElementById('verdictDesc');
+            const latEl = document.getElementById('latencyVal');
+            const actEl = document.getElementById('actionVal');
+            const spoofEl = document.getElementById('spoofProbVal');
+            const bonafideEl = document.getElementById('bonafideProbVal');
+
+            const score = res.risk_score || 0.0;
+            const color = res.color || '#10b981';
+
+            scoreEl.innerText = score.toFixed(1);
+            scoreEl.style.color = color;
+
+            verdictEl.innerText = `${res.verdict} - ${res.action}`;
+            verdictEl.style.backgroundColor = `${color}22`;
+            verdictEl.style.borderColor = color;
+            verdictEl.style.color = color;
+
+            gaugeEl.style.width = `${Math.min(100, Math.max(5, score))}%`;
+            gaugeEl.style.backgroundColor = color;
+            gaugeEl.style.boxShadow = `0 0 14px ${color}66`;
+
+            descEl.innerText = res.description || 'Inference complete.';
+            latEl.innerText = `${res.inference_time_ms} ms`;
+            actEl.innerText = res.action;
+            actEl.style.color = color;
+
+            spoofEl.innerText = `${((res.spoof_probability || 0) * 100).toFixed(1)}%`;
+            bonafideEl.innerText = `${((res.bonafide_probability || 0) * 100).toFixed(1)}%`;
+
+            logTerminal(`[VERDICT] ${label} -> Risk: ${score.toFixed(1)}/100 | Action: ${res.action} | Latency: ${res.inference_time_ms}ms`);
+        }
+
+        function logTerminal(msg) {
+            const term = document.getElementById('terminalLog');
+            const timeStr = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.innerHTML = `<span class="terminal-line-highlight">[${timeStr}]</span> ${msg}`;
+            term.appendChild(div);
+            term.scrollTop = term.scrollHeight;
+        }
+    </script>
 </body>
 </html>

@@ -1,10 +1,10 @@
 """
 echoX - Unit & Integration Test Suite
 Validates:
-1. Audio processor resampling & direct slicing / zero-padding to 64,600 samples.
+1. Audio processor resampling & direct slicing / zero-padding to 64,000 samples (4.0s).
 2. Risk engine 3-tier decision policy.
 3. Backend audit compliance logging.
-4. AASIST model forward-pass with hardcoded probs[0] index.
+4. Facebook Wav2Vec 2.0 model forward-pass.
 5. FastAPI REST endpoints (/health, /api/v1/analyze-file, /api/v1/audit-logs).
 """
 
@@ -25,16 +25,21 @@ client = TestClient(app)
 
 
 def test_audio_processor_slicing_and_padding():
-    """Verify that any length audio is sliced or zero-padded directly to 64,600 samples."""
+    """Verify that any length audio is sliced or zero-padded directly to 64,000 samples (4.0s)."""
     short_audio = np.random.normal(0, 0.1, 10000).astype(np.float32)
-    padded = AUDIO_PROCESSOR.enforce_aasist_window(short_audio)
+    padded = AUDIO_PROCESSOR.enforce_audio_window(short_audio)
     assert len(padded) == AUDIO_CONFIG.SAMPLE_WINDOW
+    assert len(padded) == 64000
     assert np.all(padded[10000:] == 0.0)
 
     long_audio = np.random.normal(0, 0.1, 100000).astype(np.float32)
-    sliced = AUDIO_PROCESSOR.enforce_aasist_window(long_audio)
+    sliced = AUDIO_PROCESSOR.enforce_audio_window(long_audio)
     assert len(sliced) == AUDIO_CONFIG.SAMPLE_WINDOW
+    assert len(sliced) == 64000
     assert np.array_equal(sliced, long_audio[:AUDIO_CONFIG.SAMPLE_WINDOW])
+
+    alias_padded = AUDIO_PROCESSOR.enforce_aasist_window(short_audio)
+    assert len(alias_padded) == 64000
 
 
 def test_risk_engine_decision_policies():
@@ -73,8 +78,8 @@ def test_backend_audit_logger():
 
 
 def test_detector_inference():
-    """Verify AASIST model forward-pass with hardcoded probs[0] index."""
-    tone = (np.sin(2 * np.pi * 300 * np.linspace(0, 4.0375, AUDIO_CONFIG.SAMPLE_WINDOW)) * 0.4).astype(np.float32)
+    """Verify Facebook Wav2Vec 2.0 model forward-pass."""
+    tone = (np.sin(2 * np.pi * 300 * np.linspace(0, 4.0, AUDIO_CONFIG.SAMPLE_WINDOW)) * 0.4).astype(np.float32)
     result = DETECTOR_SERVICE.detect(tone)
 
     assert "risk_score" in result
@@ -83,6 +88,8 @@ def test_detector_inference():
     assert "inference_time_ms" in result
     assert result["inference_time_ms"] > 0
     assert 0.0 <= result["risk_score"] <= 100.0
+    assert "model_name" in result
+    assert "latents_meta" in result
 
 
 def test_api_health():
@@ -92,6 +99,7 @@ def test_api_health():
     data = resp.json()
     assert data["status"] == "online"
     assert data["service"] == "echoX"
+    assert "Facebook Wav2Vec 2.0" in data["model"]
 
 
 def test_api_analyze_file_upload():

@@ -29,23 +29,23 @@ class RiskThresholdConfig(BaseModel):
 
 class AudioConfig(BaseModel):
     """
-    Audio DSP & AASIST Window Parameters
+    Audio DSP & Standard 4.0-second Window Parameters (16 kHz)
     """
     SAMPLE_RATE: int = Field(default=16000, description="Standardized sampling rate (16 kHz)")
-    SAMPLE_WINDOW: int = Field(default=64600, description="AASIST fixed window (64,600 samples)")
-    HOP_LENGTH: int = Field(default=16000, description="Sliding window hop size (16,000 samples)")
-    CHUNK_SIZE: int = Field(default=4000, description="Streaming chunk size (4,000 samples)")
+    SAMPLE_WINDOW: int = Field(default=64000, description="Standard 4.0-second window (64,000 samples @ 16 kHz)")
+    HOP_LENGTH: int = Field(default=16000, description="Sliding window hop size (16,000 samples / 1.0s)")
+    CHUNK_SIZE: int = Field(default=4000, description="Streaming chunk size (4,000 samples / 0.25s)")
 
 
 class ModelConfig(BaseModel):
     """
-    Model architecture & checkpoint settings
+    Model architecture & checkpoint settings: Facebook Wav2Vec 2.0
     """
-    MODEL_NAME: str = "AASIST"
-    WEIGHTS_PATH: Path = WEIGHTS_DIR / "AASIST.pth"
-    SPOOF_CLASS_INDEX: int = Field(default=0, description="Hardcoded index for spoof logit probability")
-    ENABLE_SSL_ENSEMBLE: bool = Field(default=True, description="Enable secondary SSL model for modern vocoders")
-    SSL_MODEL_NAME: str = Field(default="MelodyMachine/Deepfake-audio-detection-V2", description="HuggingFace SSL model")
+    MODEL_NAME: str = "Facebook Wav2Vec 2.0"
+    PRIMARY_MODEL: str = "facebook/wav2vec2-base"
+    FINE_TUNED_MODEL: str = "MelodyMachine/Deepfake-audio-detection-V2"
+    WEIGHTS_PATH: Path = WEIGHTS_DIR / "wav2vec2_classifier.pth"
+    SPOOF_CLASS_INDEX: int = Field(default=0, description="Index for spoof logit probability")
 
 
 class AuditConfig(BaseModel):
