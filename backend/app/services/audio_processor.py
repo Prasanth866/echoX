@@ -106,22 +106,28 @@ class AudioProcessor:
                 res_type="soxr_hq"
             ).astype(np.float32)
         except Exception:
-            target_length = int(round(len(audio) * float(self.target_sample_rate) / orig_sr))
-            return signal.resample(audio, target_length).astype(np.float32)
+            from math import gcd
+            g = gcd(orig_sr, self.target_sample_rate)
+            up = self.target_sample_rate // g
+            down = orig_sr // g
+            return signal.resample_poly(audio, up, down).astype(np.float32)
 
     def enforce_audio_window(self, audio: np.ndarray) -> np.ndarray:
         """
-        Direct Slicing / Zero-padding to enforce exactly 4.0-second (64,000 samples) window.
-        - If shorter: zero-pad directly to target_samples.
+        Direct Slicing / Tiling to enforce exactly 4.0-second (64,000 samples) window.
+        - If shorter: loop/tile active speech to fill target_samples without boundary zero-padding artifacts.
         - If longer: slice directly to first target_samples.
         """
         length = len(audio)
+        if length == 0:
+            return np.zeros(self.target_samples, dtype=np.float32)
         if length == self.target_samples:
             return audio.astype(np.float32)
 
         if length < self.target_samples:
-            padded = np.pad(audio, (0, self.target_samples - length), mode="constant")
-            return padded.astype(np.float32)
+            repeats = int(np.ceil(self.target_samples / length))
+            tiled = np.tile(audio, repeats)[:self.target_samples]
+            return tiled.astype(np.float32)
         else:
             sliced = audio[:self.target_samples]
             return sliced.astype(np.float32)
@@ -134,12 +140,30 @@ class AudioProcessor:
         1. Decode bytes -> (data, sr)
         2. Mono conversion
         3. Resampling to 16 kHz
-        4. Direct slicing or zero-padding to 4.0 seconds (64,000 samples)
+        4. Ambient silence trimming (VAD)
+        5. Peak normalization
+        6. Continuous window enforcement (64,000 samples)
         """
         data, sr = self.load_audio_from_bytes(audio_bytes)
         mono = self.to_mono(data)
         resampled = self.resample(mono, sr)
-        windowed = self.enforce_audio_window(resampled)
+
+        # Trim leading/trailing ambient silence if audio contains speech
+        trimmed_speech = resampled
+        if len(resampled) > 4000:
+            try:
+                trimmed, _ = librosa.effects.trim(resampled, top_db=30)
+                if len(trimmed) >= 4000:
+                    trimmed_speech = trimmed
+            except Exception:
+                pass
+
+        # Peak normalization for optimal neural representation
+        peak = float(np.max(np.abs(trimmed_speech))) if len(trimmed_speech) > 0 else 0.0
+        if peak > 1e-4:
+            trimmed_speech = (trimmed_speech / peak) * 0.85
+
+        windowed = self.enforce_audio_window(trimmed_speech)
 
         return {
             "processed_audio": windowed,

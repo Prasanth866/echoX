@@ -39,29 +39,24 @@ class DetectorService:
 
     def _check_silence_or_ambient(self, audio: np.ndarray) -> Dict[str, Any]:
         """
-        Energy and RMS check to filter out ambient noise and silence.
+        Energy and RMS check to filter out pure flatline silence.
         """
-        peak = np.max(np.abs(audio)) + 1e-6
-        norm_audio = audio / peak
-        rms = float(np.sqrt(np.mean(np.square(audio))))
+        peak = float(np.max(np.abs(audio))) if len(audio) > 0 else 0.0
+        rms = float(np.sqrt(np.mean(np.square(audio)))) if len(audio) > 0 else 0.0
 
-        if rms < 0.003:
+        if peak < 1e-4 or rms < 1e-5:
             return {
                 "is_silence": True,
-                "rms": round(rms, 5),
+                "rms": round(rms, 6),
+                "peak": round(peak, 6),
                 "vocal_ratio": 0.0
             }
 
-        fft_vals = np.abs(np.fft.rfft(norm_audio))
-        freqs = np.fft.rfftfreq(len(norm_audio), 1.0 / AUDIO_CONFIG.SAMPLE_RATE)
-        total_energy = np.sum(fft_vals ** 2) + 1e-9
-        vocal_energy = np.sum(fft_vals[(freqs >= 100) & (freqs <= 3500)] ** 2)
-        vocal_ratio = float(vocal_energy / total_energy)
-
         return {
             "is_silence": False,
-            "rms": round(rms, 5),
-            "vocal_ratio": round(vocal_ratio, 3)
+            "rms": round(rms, 6),
+            "peak": round(peak, 6),
+            "vocal_ratio": 1.0
         }
 
     def detect(self, audio_window: np.ndarray) -> Dict[str, Any]:
@@ -81,7 +76,7 @@ class DetectorService:
                 "spoof_probability": 0.0,
                 "bonafide_probability": 1.0,
                 "color": "#64748B",
-                "description": "No active speech detected (ambient silence / noise gated).",
+                "description": "Audio is silent or empty. Please provide an audible speech recording.",
                 "inference_time_ms": latency_ms,
                 "acoustic_features": heuristics,
                 "model_name": MODEL_CONFIG.MODEL_NAME

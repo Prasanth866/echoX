@@ -668,16 +668,19 @@
     </main>
 
     <script>
-        let mediaRecorder;
-        let audioChunks = [];
-        let recordedBlob = null;
         let isRecording = false;
-        let audioContext, analyser, animId;
+        let audioContext = null;
+        let analyser = null;
+        let animId = null;
+        let micStream = null;
+        let recorderNode = null;
+        let muteGainNode = null;
+        let pcmBuffers = [];
+        let totalSamplesRecorded = 0;
+        let recordedBlob = null;
 
-        function setupVisualizer(stream) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        function setupVisualizer(source) {
             analyser = audioContext.createAnalyser();
-            const source = audioContext.createMediaStreamSource(stream);
             source.connect(analyser);
             analyser.fftSize = 64;
             const bufferLength = analyser.frequencyBinCount;
@@ -702,36 +705,42 @@
             draw();
         }
 
-        function audioBufferToWav(buffer) {
-            const numChannels = 1;
-            const sampleRate = buffer.sampleRate;
-            const format = 1;
-            const bitDepth = 16;
-            let sourceData = buffer.getChannelData(0);
-            if (buffer.numberOfChannels > 1) {
-                const ch1 = buffer.getChannelData(1);
-                sourceData = new Float32Array(buffer.length);
-                for (let i = 0; i < buffer.length; i++) {
-                    sourceData[i] = (buffer.getChannelData(0)[i] + ch1[i]) / 2;
-                }
+        function resampleTo16k(sourceData, sourceRate) {
+            if (sourceRate === 16000) return sourceData;
+            const ratio = sourceRate / 16000;
+            const targetLength = Math.round(sourceData.length / ratio);
+            const result = new Float32Array(targetLength);
+            for (let i = 0; i < targetLength; i++) {
+                const sourceIndex = i * ratio;
+                const indexLow = Math.floor(sourceIndex);
+                const indexHigh = Math.min(indexLow + 1, sourceData.length - 1);
+                const fraction = sourceIndex - indexLow;
+                result[i] = sourceData[indexLow] * (1 - fraction) + sourceData[indexHigh] * fraction;
             }
+            return result;
+        }
+
+        function createWavBlob(samples, sampleRate = 16000) {
+            const numChannels = 1;
+            const bitDepth = 16;
             const bytesPerSample = bitDepth / 8;
             const blockAlign = numChannels * bytesPerSample;
-            const dataSize = sourceData.length * bytesPerSample;
-            const bufferSize = 44 + dataSize;
-            const arrayBuffer = new ArrayBuffer(bufferSize);
-            const view = new DataView(arrayBuffer);
+            const dataSize = samples.length * bytesPerSample;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+
             function writeString(v, offset, str) {
                 for (let i = 0; i < str.length; i++) {
                     v.setUint8(offset + i, str.charCodeAt(i));
                 }
             }
+
             writeString(view, 0, 'RIFF');
             view.setUint32(4, 36 + dataSize, true);
             writeString(view, 8, 'WAVE');
             writeString(view, 12, 'fmt ');
             view.setUint32(16, 16, true);
-            view.setUint16(20, format, true);
+            view.setUint16(20, 1, true); // PCM format
             view.setUint16(22, numChannels, true);
             view.setUint32(24, sampleRate, true);
             view.setUint32(28, sampleRate * blockAlign, true);
@@ -739,13 +748,14 @@
             view.setUint16(34, bitDepth, true);
             writeString(view, 36, 'data');
             view.setUint32(40, dataSize, true);
+
             let offset = 44;
-            for (let i = 0; i < sourceData.length; i++) {
-                let s = Math.max(-1, Math.min(1, sourceData[i]));
-                s = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                view.setInt16(offset, s, true);
+            for (let i = 0; i < samples.length; i++) {
+                let s = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
                 offset += 2;
             }
+
             return new Blob([view], { type: 'audio/wav' });
         }
 
@@ -754,69 +764,105 @@
             const micBox = document.getElementById('micBox');
             const statusText = document.getElementById('micStatusText');
             const btnVerify = document.getElementById('btnVerify');
+            const player = document.getElementById('audioPreview');
 
             if (!isRecording) {
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    setupVisualizer(stream);
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-
-                    mediaRecorder.ondataavailable = (e) => {
-                        if (e.data.size > 0) audioChunks.push(e.data);
-                    };
-
-                    mediaRecorder.onstop = async () => {
-                        const recMime = mediaRecorder.mimeType || 'audio/webm';
-                        const rawBlob = new Blob(audioChunks, { type: recMime });
-                        try {
-                            const arrayBuffer = await rawBlob.arrayBuffer();
-                            const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
-                            const decodedBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
-                            decodeCtx.close();
-                            const targetLength = Math.ceil(decodedBuffer.duration * 16000);
-                            const offlineCtx = new OfflineAudioContext(1, targetLength, 16000);
-                            const sourceNode = offlineCtx.createBufferSource();
-                            sourceNode.buffer = decodedBuffer;
-                            sourceNode.connect(offlineCtx.destination);
-                            sourceNode.start(0);
-                            const renderedBuffer = await offlineCtx.startRendering();
-                            recordedBlob = audioBufferToWav(renderedBuffer);
-                        } catch (err) {
-                            recordedBlob = rawBlob;
+                    micStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
                         }
-                        const audioUrl = URL.createObjectURL(recordedBlob);
-                        const player = document.getElementById('audioPreview');
-                        player.src = audioUrl;
-                        player.style.display = 'block';
-                        btnVerify.style.display = 'inline-flex';
-                        statusText.innerText = 'Recording complete. Click "Verify Spoken Audio" to evaluate.';
-                        if (animId) cancelAnimationFrame(animId);
+                    });
+
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (audioContext.state === 'suspended') {
+                        await audioContext.resume();
+                    }
+
+                    const source = audioContext.createMediaStreamSource(micStream);
+                    setupVisualizer(source);
+
+                    recorderNode = audioContext.createScriptProcessor(4096, 1, 1);
+                    pcmBuffers = [];
+                    totalSamplesRecorded = 0;
+
+                    recorderNode.onaudioprocess = (e) => {
+                        if (!isRecording) return;
+                        const inputChannel = e.inputBuffer.getChannelData(0);
+                        const copy = new Float32Array(inputChannel.length);
+                        copy.set(inputChannel);
+                        pcmBuffers.push(copy);
+                        totalSamplesRecorded += copy.length;
                     };
 
-                    mediaRecorder.start();
+                    muteGainNode = audioContext.createGain();
+                    muteGainNode.gain.value = 0; // Prevent microphone audio feedback to speakers
+
+                    source.connect(recorderNode);
+                    recorderNode.connect(muteGainNode);
+                    muteGainNode.connect(audioContext.destination);
+
                     isRecording = true;
                     micBox.classList.add('recording');
                     btnRecord.innerHTML = '<span>Stop Recording</span>';
                     btnRecord.className = 'btn-action btn-stop';
                     statusText.innerText = 'Recording live microphone audio... (Speak now)';
+                    player.style.display = 'none';
+                    btnVerify.style.display = 'none';
                 } catch (err) {
-                    alert('Microphone access denied or not available in this context: ' + err.message);
+                    alert('Microphone access denied or not available: ' + err.message);
                 }
             } else {
-                mediaRecorder.stop();
                 isRecording = false;
                 micBox.classList.remove('recording');
                 btnRecord.innerHTML = '<span>Record Again</span>';
                 btnRecord.className = 'btn-action btn-record';
+                statusText.innerText = 'Finalizing audio...';
+
+                if (micStream) {
+                    micStream.getTracks().forEach(track => track.stop());
+                }
+                if (recorderNode) {
+                    recorderNode.disconnect();
+                }
+                if (muteGainNode) {
+                    muteGainNode.disconnect();
+                }
+                if (animId) {
+                    cancelAnimationFrame(animId);
+                }
+
+                // Merge recorded PCM buffers into one Float32Array
+                const merged = new Float32Array(totalSamplesRecorded);
+                let offset = 0;
+                for (let i = 0; i < pcmBuffers.length; i++) {
+                    merged.set(pcmBuffers[i], offset);
+                    offset += pcmBuffers[i].length;
+                }
+
+                const currentSr = audioContext ? audioContext.sampleRate : 44100;
+                const resampled = resampleTo16k(merged, currentSr);
+                recordedBlob = createWavBlob(resampled, 16000);
+
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.close();
+                }
+
+                const audioUrl = URL.createObjectURL(recordedBlob);
+                player.src = audioUrl;
+                player.style.display = 'block';
+                btnVerify.style.display = 'inline-flex';
+                statusText.innerText = 'Recording complete. Click "Verify Spoken Audio" to evaluate.';
             }
         }
 
         async function verifyRecordedAudio() {
             if (!recordedBlob) return;
-            const ext = recordedBlob.type.includes('wav') ? 'wav' : (recordedBlob.type.includes('mp4') ? 'mp4' : 'webm');
             const formData = new FormData();
-            formData.append('file', recordedBlob, `live_microphone.${ext}`);
+            formData.append('file', recordedBlob, 'live_microphone.wav');
             await postAudioData(formData, 'Live Microphone Recording');
         }
 

@@ -35,53 +35,66 @@ def analyze_file_input(audio_filepath: str):
             "N/A"
         )
 
-    with open(audio_filepath, "rb") as f:
-        audio_bytes = f.read()
+    try:
+        with open(audio_filepath, "rb") as f:
+            audio_bytes = f.read()
 
-    proc_res = AUDIO_PROCESSOR.process_file_bytes(audio_bytes)
-    det_res = DETECTOR_SERVICE.detect(proc_res["processed_audio"])
+        if len(audio_bytes) == 0:
+            return (
+                "<div style='color: #ef4444; font-weight: bold; text-align: center; padding: 20px;'>Uploaded audio file is empty. Please choose a valid recording.</div>",
+                "N/A", "N/A", "N/A"
+            )
 
-    risk_score = det_res["risk_score"]
-    color = det_res["color"]
-    verdict = det_res["verdict"]
-    action = det_res["action"]
+        proc_res = AUDIO_PROCESSOR.process_file_bytes(audio_bytes)
+        det_res = DETECTOR_SERVICE.detect(proc_res["processed_audio"])
 
-    AUDIT_LOGGER.log_event(
-        audio_bytes=audio_bytes,
-        risk_score=risk_score,
-        verdict=verdict,
-        action=action,
-        filename=Path(audio_filepath).name
-    )
+        risk_score = det_res["risk_score"]
+        color = det_res["color"]
+        verdict = det_res["verdict"]
+        action = det_res["action"]
 
-    latents = det_res.get("latents_meta", {})
-    latent_norm = latents.get("latent_norm", 0.0)
+        AUDIT_LOGGER.log_event(
+            audio_bytes=audio_bytes,
+            risk_score=risk_score,
+            verdict=verdict,
+            action=action,
+            filename=Path(audio_filepath).name
+        )
 
-    meter_html = f"""
-    <div style="background: linear-gradient(135deg, #0b1120 0%, #0f172a 100%); border-radius: 16px; padding: 26px; text-align: center; border: 1.5px solid {color}55; box-shadow: 0 10px 30px -5px {color}22;">
-        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 1.8px;">Facebook Wav2Vec 2.0 Neural Verdict</div>
-        <div style="font-size: 56px; font-weight: 900; color: {color}; margin: 8px 0; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.04em;">
-            {risk_score:.1f}<span style="font-size: 22px; color: #64748b;"> / 100</span>
+        latents = det_res.get("latents_meta", {})
+        latent_norm = latents.get("latent_norm", 0.0)
+
+        meter_html = f"""
+        <div style="background: linear-gradient(135deg, #0b1120 0%, #0f172a 100%); border-radius: 16px; padding: 26px; text-align: center; border: 1.5px solid {color}55; box-shadow: 0 10px 30px -5px {color}22;">
+            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 1.8px;">Facebook Wav2Vec 2.0 Neural Verdict</div>
+            <div style="font-size: 56px; font-weight: 900; color: {color}; margin: 8px 0; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.04em;">
+                {risk_score:.1f}<span style="font-size: 22px; color: #64748b;"> / 100</span>
+            </div>
+            <div style="display: inline-block; background: {color}18; color: {color}; border: 1px solid {color}66; padding: 6px 20px; border-radius: 9999px; font-weight: 800; font-size: 15px; margin-bottom: 16px; letter-spacing: 0.04em;">
+                {verdict} &bull; {action}
+            </div>
+            <div style="background: rgba(255,255,255,0.08); border-radius: 9999px; height: 12px; overflow: hidden; margin: 12px auto; max-width: 480px;">
+                <div style="width: {max(5, risk_score)}%; height: 100%; background: {color}; border-radius: 9999px; box-shadow: 0 0 12px {color}; transition: width 0.6s ease-in-out;"></div>
+            </div>
+            <div style="font-size: 13.5px; color: #cbd5e1; margin-top: 12px; line-height: 1.4;">{det_res['description']}</div>
+            <div style="display: flex; justify-content: center; gap: 20px; margin-top: 16px; font-size: 12px; color: #94a3b8; font-family: monospace;">
+                <span>Spoof: {det_res['spoof_probability']*100:.1f}%</span>
+                <span>Bona Fide: {det_res['bonafide_probability']*100:.1f}%</span>
+                <span>Latent Norm: {latent_norm}</span>
+            </div>
         </div>
-        <div style="display: inline-block; background: {color}18; color: {color}; border: 1px solid {color}66; padding: 6px 20px; border-radius: 9999px; font-weight: 800; font-size: 15px; margin-bottom: 16px; letter-spacing: 0.04em;">
-            {verdict} &bull; {action}
-        </div>
-        <div style="background: rgba(255,255,255,0.08); border-radius: 9999px; height: 12px; overflow: hidden; margin: 12px auto; max-width: 480px;">
-            <div style="width: {max(5, risk_score)}%; height: 100%; background: {color}; border-radius: 9999px; box-shadow: 0 0 12px {color}; transition: width 0.6s ease-in-out;"></div>
-        </div>
-        <div style="font-size: 13.5px; color: #cbd5e1; margin-top: 12px; line-height: 1.4;">{det_res['description']}</div>
-        <div style="display: flex; justify-content: center; gap: 20px; margin-top: 16px; font-size: 12px; color: #94a3b8; font-family: monospace;">
-            <span>Spoof: {det_res['spoof_probability']*100:.1f}%</span>
-            <span>Bona Fide: {det_res['bonafide_probability']*100:.1f}%</span>
-            <span>Latent Norm: {latent_norm}</span>
-        </div>
-    </div>
-    """
+        """
 
-    score_str = f"{risk_score:.1f} / 100"
-    latency_str = f"{det_res['inference_time_ms']} ms"
+        score_str = f"{risk_score:.1f} / 100"
+        latency_str = f"{det_res['inference_time_ms']} ms"
 
-    return meter_html, score_str, action, latency_str
+        return meter_html, score_str, action, latency_str
+
+    except Exception as e:
+        return (
+            f"<div style='color: #ef4444; font-weight: bold; text-align: center; padding: 20px;'>Error analyzing audio file: {str(e)}</div>",
+            "N/A", "N/A", "N/A"
+        )
 
 
 def analyze_mic_input(audio_input):
@@ -89,14 +102,14 @@ def analyze_mic_input(audio_input):
     if audio_input is None:
         return (
             "<div style='color: #94a3b8; padding: 24px; text-align: center;'>Speak clearly into your microphone for 3-4 seconds and click <strong>Verify Spoken Audio</strong>.</div>",
-            "N/A", "N/A", "N/A", None
+            "N/A", "N/A", "N/A"
         )
 
     try:
         raw_bytes = b""
         if isinstance(audio_input, str):
             if not os.path.exists(audio_input):
-                return "<div style='color: #ef4444;'>Audio file not found. Please record again.</div>", "N/A", "N/A", "N/A", None
+                return "<div style='color: #ef4444;'>Audio file not found. Please record again.</div>", "N/A", "N/A", "N/A"
             with open(audio_input, "rb") as f:
                 raw_bytes = f.read()
             data, sr = AUDIO_PROCESSOR.load_audio_from_bytes(raw_bytes)
@@ -113,21 +126,40 @@ def analyze_mic_input(audio_input):
             audio_data = audio_input.get("data")
             data = audio_data.astype(np.float32) / (32768.0 if audio_data.dtype == np.int16 else 1.0)
         else:
-            return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A", None
+            return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A"
+
+        if len(data) == 0:
+            return (
+                "<div style='color: #ef4444; padding: 24px; text-align: center;'>No audio received. Please record for 3-4 seconds and click <strong>Verify Spoken Audio</strong>.</div>",
+                "N/A", "N/A", "N/A"
+            )
 
         mono = AUDIO_PROCESSOR.to_mono(data)
+        if len(mono) == 0:
+            return (
+                "<div style='color: #ef4444; padding: 24px; text-align: center;'>No audio received. Please record for 3-4 seconds and click <strong>Verify Spoken Audio</strong>.</div>",
+                "N/A", "N/A", "N/A"
+            )
+
         resampled = AUDIO_PROCESSOR.resample(mono, sr)
         windowed = AUDIO_PROCESSOR.enforce_audio_window(resampled)
 
         peak = float(np.max(np.abs(windowed)))
-        if peak > 0.002:
-            windowed = (windowed / (peak + 1e-6)) * 0.75
+        if peak > 0.03:
+            gain = min(0.75 / (peak + 1e-6), 3.0)
+            windowed = windowed * gain
 
         det_res = DETECTOR_SERVICE.detect(windowed)
         risk_score = det_res["risk_score"]
         color = det_res["color"]
         verdict = det_res["verdict"]
         action = det_res["action"]
+
+        if not raw_bytes and len(windowed) > 0:
+            import io
+            bio = io.BytesIO()
+            sf.write(bio, windowed, 16000, format="WAV", subtype="PCM_16")
+            raw_bytes = bio.getvalue()
 
         if raw_bytes:
             AUDIT_LOGGER.log_event(
@@ -153,11 +185,10 @@ def analyze_mic_input(audio_input):
             <div style="font-size: 13.5px; color: #cbd5e1; margin-top: 12px; line-height: 1.4;">{det_res['description']}</div>
         </div>
         """
-        playback_data = (16000, (windowed * 32767).astype(np.int16))
-        return meter_html, f"{risk_score:.1f} / 100", action, f"{det_res['inference_time_ms']} ms", playback_data
+        return meter_html, f"{risk_score:.1f} / 100", action, f"{det_res['inference_time_ms']} ms"
 
     except Exception as e:
-        return f"<div style='color: #ef4444;'>Error analyzing microphone input: {str(e)}</div>", "N/A", "N/A", "N/A", None
+        return f"<div style='color: #ef4444;'>Error analyzing microphone input: {str(e)}</div>", "N/A", "N/A", "N/A"
 
 
 custom_css = """
@@ -229,8 +260,8 @@ with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield") as demo:
 
             with gr.Row(equal_height=True):
                 with gr.Column(scale=1):
-                    file_audio = gr.Audio(label="Audio Preview / Custom Upload / Mic Record", sources=["upload", "microphone"], type="filepath")
-                    sample_desc = gr.Markdown("*Select one of the 4 benchmark samples above, upload an audio file, or click the mic to record.*")
+                    file_audio = gr.Audio(label="Audio Preview / Custom Upload", sources=["upload"], type="filepath")
+                    sample_desc = gr.Markdown("*Select one of the 4 benchmark samples above or upload an audio file.*")
                     btn_analyze = gr.Button("Run Facebook Wav2Vec 2.0 Analysis", variant="primary", size="lg")
 
                 with gr.Column(scale=1):
@@ -274,40 +305,39 @@ with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield") as demo:
                 outputs=[result_meter, metric_score, metric_action, metric_latency]
             )
 
-        with gr.TabItem("Live Audio & Microphone Guard"):
+        with gr.TabItem("Upload Audio / Voice File"):
             gr.Markdown(
                 """
-                ### Speak Live to Verify Voice Authenticity
-                Click the record button below to speak for 3-4 seconds. Click Stop when done, then click **Verify Spoken Audio** (or let it auto-verify on stop).
+                ### Upload Any Voice or Audio Recording
+                Upload an audio file (`.wav`, `.mp3`, `.m4a`, `.flac`, `.ogg`) recorded from your phone, Voice Memos, QuickTime, or microphone.
+                Click **Verify Audio File** to evaluate authenticity using Facebook Wav2Vec 2.0.
                 """
             )
             with gr.Row(equal_height=True):
                 with gr.Column(scale=1):
-                    mic_input = gr.Audio(sources=["microphone"], type="filepath", label="Record Microphone Audio")
-                    btn_mic_verify = gr.Button("Verify Spoken Audio", variant="primary", size="lg")
-                    mic_playback = gr.Audio(label="Processed 16 kHz Model Audio Playback", interactive=False)
+                    upload_audio = gr.Audio(
+                        label="Drop Voice Recording or Click to Upload (.wav, .mp3, .m4a, .flac)",
+                        sources=["upload"],
+                        type="filepath"
+                    )
+                    btn_upload_verify = gr.Button("Verify Audio File", variant="primary", size="lg")
                 with gr.Column(scale=1):
-                    mic_meter = gr.HTML(
+                    upload_meter = gr.HTML(
                         """
                         <div style="background: #0f172a; border-radius: 16px; padding: 36px; text-align: center; border: 1px dashed rgba(255,255,255,0.15); color: #94a3b8;">
-                            Record speech and click <strong>Verify Spoken Audio</strong>.
+                            Upload an audio file and click <strong>Verify Audio File</strong>.
                         </div>
                         """
                     )
                     with gr.Row():
-                        mic_score = gr.Label(label="Live Risk Score")
-                        mic_action = gr.Label(label="Policy Decision")
-                        mic_latency = gr.Label(label="Inference Latency")
+                        upload_score = gr.Label(label="Risk Score")
+                        upload_action = gr.Label(label="Policy Decision")
+                        upload_latency = gr.Label(label="Inference Latency")
 
-            btn_mic_verify.click(
-                analyze_mic_input,
-                inputs=mic_input,
-                outputs=[mic_meter, mic_score, mic_action, mic_latency, mic_playback]
-            )
-            mic_input.stop_recording(
-                analyze_mic_input,
-                inputs=mic_input,
-                outputs=[mic_meter, mic_score, mic_action, mic_latency, mic_playback]
+            btn_upload_verify.click(
+                analyze_file_input,
+                inputs=upload_audio,
+                outputs=[upload_meter, upload_score, upload_action, upload_latency]
             )
 
         with gr.TabItem("Enterprise 3-Tier Policy"):
