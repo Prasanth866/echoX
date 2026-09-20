@@ -68,13 +68,21 @@ class AudioProcessor:
                 data, sr = sf.read(bio, dtype="float32")
             return data, sr
         except Exception:
+            import subprocess
+            try:
+                proc = subprocess.run([
+                    "ffmpeg", "-y", "-i", "pipe:0", "-f", "wav", "-acodec", "pcm_s16le", "-ar", str(self.target_sample_rate), "-ac", "1", "pipe:1"
+                ], input=audio_bytes, capture_output=True)
+                if proc.returncode == 0 and len(proc.stdout) > 0:
+                    data, sr = sf.read(io.BytesIO(proc.stdout), dtype="float32")
+                    return data, sr
+            except Exception:
+                pass
             from pydub import AudioSegment
             with io.BytesIO(audio_bytes) as bio:
                 seg = AudioSegment.from_file(bio)
-                seg = seg.set_sample_width(2)
+                seg = seg.set_frame_rate(self.target_sample_rate).set_channels(1).set_sample_width(2)
                 data = np.array(seg.get_array_of_samples(), dtype=np.float32) / 32768.0
-                if seg.channels > 1:
-                    data = data.reshape(-1, seg.channels)
                 return data, seg.frame_rate
 
     def to_mono(self, audio: np.ndarray) -> np.ndarray:

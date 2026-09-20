@@ -13,12 +13,13 @@ import sys
 from pathlib import Path
 import gradio as gr
 import numpy as np
+import soundfile as sf
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from backend.app.services.audio_processor import AUDIO_PROCESSOR, clean_and_normalize_audio
+from backend.app.services.audio_processor import AUDIO_PROCESSOR
 from backend.app.services.detector import DETECTOR_SERVICE
 from backend.app.core.audit_engine import AUDIT_LOGGER
 from backend.app.core.config import TEST_SAMPLES_DIR, MODEL_CONFIG
@@ -92,12 +93,13 @@ def analyze_mic_input(audio_input):
         )
 
     try:
+        raw_bytes = b""
         if isinstance(audio_input, str):
             if not os.path.exists(audio_input):
                 return "<div style='color: #ef4444;'>Audio file not found. Please record again.</div>", "N/A", "N/A", "N/A"
             with open(audio_input, "rb") as f:
-                audio_bytes = f.read()
-            data, sr = AUDIO_PROCESSOR.load_audio_from_bytes(audio_bytes)
+                raw_bytes = f.read()
+            data, sr = AUDIO_PROCESSOR.load_audio_from_bytes(raw_bytes)
         elif isinstance(audio_input, tuple):
             sr, audio_data = audio_input
             if audio_data.dtype == np.int16:
@@ -113,22 +115,28 @@ def analyze_mic_input(audio_input):
         else:
             return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A"
 
-        tensor_norm, is_active = clean_and_normalize_audio(data, sr)
-        if not is_active or tensor_norm is None:
-            return (
-                "<div style='background: #1e293b; border-left: 4px solid #64748b; padding: 18px; border-radius: 8px; text-align: center; color: #94a3b8;'>"
-                "<strong>No Active Speech Detected:</strong> Audio was silent or ambient noise (under 0.5s speech). "
-                "Please speak clearly into the microphone for 3-4 seconds and verify."
-                "</div>",
-                "0.0 / 100", "INACTIVE", "0.0 ms"
-            )
+        mono = AUDIO_PROCESSOR.to_mono(data)
+        resampled = AUDIO_PROCESSOR.resample(mono, sr)
+        windowed = AUDIO_PROCESSOR.enforce_audio_window(resampled)
 
-        windowed = tensor_norm.squeeze(0).cpu().numpy()
+        peak = float(np.max(np.abs(windowed)))
+        if peak > 0.002:
+            windowed = (windowed / (peak + 1e-6)) * 0.75
+
         det_res = DETECTOR_SERVICE.detect(windowed)
         risk_score = det_res["risk_score"]
         color = det_res["color"]
         verdict = det_res["verdict"]
         action = det_res["action"]
+
+        if raw_bytes:
+            AUDIT_LOGGER.log_event(
+                audio_bytes=raw_bytes,
+                risk_score=risk_score,
+                verdict=verdict,
+                action=action,
+                filename="live_microphone.wav"
+            )
 
         meter_html = f"""
         <div style="background: linear-gradient(135deg, #0b1120 0%, #0f172a 100%); border-radius: 16px; padding: 26px; text-align: center; border: 1.5px solid {color}55; box-shadow: 0 10px 30px -5px {color}22;">
@@ -194,7 +202,7 @@ body {
 }
 """
 
-with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield", css=custom_css) as demo:
+with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield") as demo:
     with gr.Column(elem_classes=["header-box"]):
         gr.HTML(
             """
@@ -220,8 +228,8 @@ with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield", css=custom_
 
             with gr.Row(equal_height=True):
                 with gr.Column(scale=1):
-                    file_audio = gr.Audio(label="Audio Preview / Custom Upload", type="filepath")
-                    sample_desc = gr.Markdown("*Select one of the 4 benchmark samples above or upload your own audio.*")
+                    file_audio = gr.Audio(label="Audio Preview / Custom Upload / Mic Record", sources=["upload", "microphone"], type="filepath")
+                    sample_desc = gr.Markdown("*Select one of the 4 benchmark samples above, upload an audio file, or click the mic to record.*")
                     btn_analyze = gr.Button("Run Facebook Wav2Vec 2.0 Analysis", variant="primary", size="lg")
 
                 with gr.Column(scale=1):
@@ -269,12 +277,12 @@ with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield", css=custom_
             gr.Markdown(
                 """
                 ### Speak Live to Verify Voice Authenticity
-                Speak naturally for 3-4 seconds. Facebook Wav2Vec 2.0 will analyze your acoustic vocal dynamics against synthetic voice clone profiles.
+                Click the record button below to speak for 3-4 seconds. Click Stop when done, then click **Verify Spoken Audio** (or let it auto-verify on stop).
                 """
             )
             with gr.Row(equal_height=True):
                 with gr.Column(scale=1):
-                    mic_input = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record Microphone Audio (or Upload Voice Recording)")
+                    mic_input = gr.Audio(sources=["microphone"], type="filepath", label="Record Microphone Audio")
                     btn_mic_verify = gr.Button("Verify Spoken Audio", variant="primary", size="lg")
                 with gr.Column(scale=1):
                     mic_meter = gr.HTML(
@@ -290,6 +298,11 @@ with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield", css=custom_
                         mic_latency = gr.Label(label="Inference Latency")
 
             btn_mic_verify.click(
+                analyze_mic_input,
+                inputs=mic_input,
+                outputs=[mic_meter, mic_score, mic_action, mic_latency]
+            )
+            mic_input.stop_recording(
                 analyze_mic_input,
                 inputs=mic_input,
                 outputs=[mic_meter, mic_score, mic_action, mic_latency]
@@ -325,5 +338,6 @@ if __name__ == "__main__":
         server_name="127.0.0.1",
         server_port=7860,
         share=False,
-        theme=gr.themes.Soft(primary_hue="blue")
+        theme=gr.themes.Soft(primary_hue="blue"),
+        css=custom_css
     )
