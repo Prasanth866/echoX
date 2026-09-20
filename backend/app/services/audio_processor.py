@@ -27,10 +27,13 @@ def clean_and_normalize_audio(audio_data: np.ndarray, sr: int = 16000) -> Tuple[
     6. Fixed 4.0-second Window Padding (64,000 samples) with wrap/constant mode
     """
     if audio_data.ndim > 1:
-        audio_data = np.mean(audio_data, axis=1)
+        if audio_data.shape[0] < audio_data.shape[1]:
+            audio_data = np.mean(audio_data, axis=0)
+        else:
+            audio_data = np.mean(audio_data, axis=1)
 
     if sr != 16000:
-        audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=16000)
+        audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=16000, res_type="soxr_hq")
 
     trimmed_audio, _ = librosa.effects.trim(audio_data, top_db=25)
 
@@ -42,7 +45,7 @@ def clean_and_normalize_audio(audio_data: np.ndarray, sr: int = 16000) -> Tuple[
 
     target_samples = AUDIO_CONFIG.SAMPLE_WINDOW
     if len(trimmed_audio) < target_samples:
-        padded = np.pad(trimmed_audio, (0, target_samples - len(trimmed_audio)), mode="wrap")
+        padded = np.pad(trimmed_audio, (0, target_samples - len(trimmed_audio)), mode="constant")
     else:
         padded = trimmed_audio[:target_samples]
 
@@ -87,15 +90,24 @@ class AudioProcessor:
 
     def to_mono(self, audio: np.ndarray) -> np.ndarray:
         if audio.ndim > 1:
+            if audio.shape[0] < audio.shape[1]:
+                return np.mean(audio, axis=0)
             return np.mean(audio, axis=1)
         return audio
 
     def resample(self, audio: np.ndarray, orig_sr: int) -> np.ndarray:
         if orig_sr == self.target_sample_rate:
             return audio.astype(np.float32)
-        target_length = int(round(len(audio) * float(self.target_sample_rate) / orig_sr))
-        resampled = signal.resample(audio, target_length)
-        return resampled.astype(np.float32)
+        try:
+            return librosa.resample(
+                audio.astype(np.float32),
+                orig_sr=orig_sr,
+                target_sr=self.target_sample_rate,
+                res_type="soxr_hq"
+            ).astype(np.float32)
+        except Exception:
+            target_length = int(round(len(audio) * float(self.target_sample_rate) / orig_sr))
+            return signal.resample(audio, target_length).astype(np.float32)
 
     def enforce_audio_window(self, audio: np.ndarray) -> np.ndarray:
         """

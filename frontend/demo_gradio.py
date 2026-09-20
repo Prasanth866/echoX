@@ -89,14 +89,14 @@ def analyze_mic_input(audio_input):
     if audio_input is None:
         return (
             "<div style='color: #94a3b8; padding: 24px; text-align: center;'>Speak clearly into your microphone for 3-4 seconds and click <strong>Verify Spoken Audio</strong>.</div>",
-            "N/A", "N/A", "N/A"
+            "N/A", "N/A", "N/A", None
         )
 
     try:
         raw_bytes = b""
         if isinstance(audio_input, str):
             if not os.path.exists(audio_input):
-                return "<div style='color: #ef4444;'>Audio file not found. Please record again.</div>", "N/A", "N/A", "N/A"
+                return "<div style='color: #ef4444;'>Audio file not found. Please record again.</div>", "N/A", "N/A", "N/A", None
             with open(audio_input, "rb") as f:
                 raw_bytes = f.read()
             data, sr = AUDIO_PROCESSOR.load_audio_from_bytes(raw_bytes)
@@ -113,7 +113,7 @@ def analyze_mic_input(audio_input):
             audio_data = audio_input.get("data")
             data = audio_data.astype(np.float32) / (32768.0 if audio_data.dtype == np.int16 else 1.0)
         else:
-            return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A"
+            return "<div style='color: #ef4444;'>Unsupported audio format.</div>", "N/A", "N/A", "N/A", None
 
         mono = AUDIO_PROCESSOR.to_mono(data)
         resampled = AUDIO_PROCESSOR.resample(mono, sr)
@@ -153,10 +153,11 @@ def analyze_mic_input(audio_input):
             <div style="font-size: 13.5px; color: #cbd5e1; margin-top: 12px; line-height: 1.4;">{det_res['description']}</div>
         </div>
         """
-        return meter_html, f"{risk_score:.1f} / 100", action, f"{det_res['inference_time_ms']} ms"
+        playback_data = (16000, (windowed * 32767).astype(np.int16))
+        return meter_html, f"{risk_score:.1f} / 100", action, f"{det_res['inference_time_ms']} ms", playback_data
 
     except Exception as e:
-        return f"<div style='color: #ef4444;'>Error analyzing microphone input: {str(e)}</div>", "N/A", "N/A", "N/A"
+        return f"<div style='color: #ef4444;'>Error analyzing microphone input: {str(e)}</div>", "N/A", "N/A", "N/A", None
 
 
 custom_css = """
@@ -284,6 +285,7 @@ with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield") as demo:
                 with gr.Column(scale=1):
                     mic_input = gr.Audio(sources=["microphone"], type="filepath", label="Record Microphone Audio")
                     btn_mic_verify = gr.Button("Verify Spoken Audio", variant="primary", size="lg")
+                    mic_playback = gr.Audio(label="Processed 16 kHz Model Audio Playback", interactive=False)
                 with gr.Column(scale=1):
                     mic_meter = gr.HTML(
                         """
@@ -300,12 +302,12 @@ with gr.Blocks(title="echoX - Facebook Wav2Vec 2.0 Deepfake Shield") as demo:
             btn_mic_verify.click(
                 analyze_mic_input,
                 inputs=mic_input,
-                outputs=[mic_meter, mic_score, mic_action, mic_latency]
+                outputs=[mic_meter, mic_score, mic_action, mic_latency, mic_playback]
             )
             mic_input.stop_recording(
                 analyze_mic_input,
                 inputs=mic_input,
-                outputs=[mic_meter, mic_score, mic_action, mic_latency]
+                outputs=[mic_meter, mic_score, mic_action, mic_latency, mic_playback]
             )
 
         with gr.TabItem("Enterprise 3-Tier Policy"):
